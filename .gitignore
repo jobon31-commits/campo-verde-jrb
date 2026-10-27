@@ -1,0 +1,12 @@
+# Artefactos de empaquetado y pruebas
+CAMPO-VERDE-JRB.zip
+*.zip
+
+# Sistema
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Registros y temporales
+*.log
+*.tmp

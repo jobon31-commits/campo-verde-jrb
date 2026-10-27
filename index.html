@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f2c">
+  <meta name="description" content="CAMPO VERDE JRB: medición y rectificación de áreas de predios rurales con GPS, linderos o coordenadas. Lotes, cultivos, fotos e informe técnico con coordenadas WGS 84.">
+  <title>CAMPO VERDE JRB · Medición y rectificación de áreas</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Campo Verde JRB">
+  <meta name="color-scheme" content="light">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Sprite de iconos -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-gps" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+    <symbol id="i-ruler" viewBox="0 0 24 24"><path d="m3 16 13-13 5 5-13 13H3v-5Z"/><path d="m8 11 2 2m1-5 2 2m1-5 2 2"/></symbol>
+    <symbol id="i-polygon" viewBox="0 0 24 24"><path d="m12 3 8 6-3 10H7L4 9l8-6Z"/><circle cx="12" cy="3" r="1.6" fill="currentColor" stroke="none"/><circle cx="20" cy="9" r="1.6" fill="currentColor" stroke="none"/><circle cx="17" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="7" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="4" cy="9" r="1.6" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2 19 12 8 18.8V5.2Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.6" height="14" rx="1.1" fill="currentColor" stroke="none"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.8" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 6 6v1"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 7 5 5-5 5"/><path d="M20 12h-9a6 6 0 0 0-6 6v1"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.7"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.8h6V7M6.5 7l.8 12.2h9.4L17.5 7M10 11v4.5M14 11v4.5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v2.5h16V17"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4-4 4M4 16v3.5h16V16"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-new" viewBox="0 0 24 24"><path d="M14 3H6a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 6 21h12a1.5 1.5 0 0 0 1.5-1.5V8.5L14 3Z"/><path d="M14 3v5.5h5.5M12 11v6M9 14h6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 4.5 4.5L19.5 6.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 21 19H3l9-15.5Z"/><path d="M12 9v4.5M12 16.5v.2"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6-5.4 6-10.5a6 6 0 1 0-12 0C6 15.6 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2.2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11.5" height="11.5" rx="1.6"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></symbol>
+    <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3.5h10V9M7 17H4.5A1.5 1.5 0 0 1 3 15.5v-5A1.5 1.5 0 0 1 4.5 9h15a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H17"/><rect x="7" y="14" width="10" height="6.5" rx="1"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.5h3l1.5-2h7L17 8.5h3a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3.5h11L20.5 8v12.5h-16v-17Z"/><path d="M8 3.5v5h7v-5M8 20.5v-6h8v6"/></symbol>
+    <symbol id="i-install" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 6v8m0 0 3-3m-3 3-3-3"/><path d="M10 18.5h4"/></symbol>
+  </svg>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 4 43 17 36 40 12 43 4 22Z"/>
+          <path class="brand-contour" d="M12 31c4.5-8.5 10-12 19-9M10 25c5-7.5 12-10.5 21-8"/>
+          <circle cx="24" cy="23" r="3.4"/>
+        </svg>
+        <div class="brand-text">
+          <span class="brand-name">CAMPO VERDE JRB</span>
+          <span class="brand-tag">Medición y rectificación de áreas</span>
+        </div>
+      </div>
+
+      <div class="project-field">
+        <label for="projectName">Predio / proyecto</label>
+        <input id="projectName" type="text" value="Predio de ejemplo" maxlength="60" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="top-actions">
+        <span class="save-state" id="saveState"><i></i><span id="saveStateText">Guardado local</span></span>
+        <div class="menu-wrap">
+          <button class="btn btn-quiet" id="exportBtn" type="button" aria-label="Exportar" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">
+            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>
+            <span class="btn-label">Exportar</span>
+            <svg class="icon chevron" aria-hidden="true"><use href="#i-chevron"></use></svg>
+          </button>
+          <div class="menu" id="exportMenu" role="menu" hidden>
+            <button type="button" role="menuitem" data-export="csv"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span>CSV de vértices</span></button>
+            <button type="button" role="menuitem" data-export="kml"><svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg><span>KML para Google Earth</span></button>
+            <button type="button" role="menuitem" data-export="geojson"><svg class="icon" aria-hidden="true"><use href="#i-polygon"></use></svg><span>GeoJSON</span></button>
+            <button type="button" role="menuitem" data-export="summary"><svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg><span>Copiar resumen</span></button>
+            <hr>
+            <button type="button" role="menuitem" data-export="print"><svg class="icon" aria-hidden="true"><use href="#i-print"></use></svg><span>Informe / imprimir PDF</span></button>
+            <hr>
+            <button type="button" role="menuitem" data-export="backup"><svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg><span>Respaldo del proyecto (JSON)</span></button>
+            <button type="button" role="menuitem" data-export="restore"><svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg><span>Restaurar respaldo…</span></button>
+          </div>
+        </div>
+        <button class="btn btn-quiet install-btn" id="installBtn" type="button" aria-label="Instalar aplicación" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#i-install"></use></svg>
+          <span class="btn-label">Instalar</span>
+        </button>
+        <button class="btn btn-cream" id="newBtn" type="button" aria-label="Nuevo caso">
+          <svg class="icon" aria-hidden="true"><use href="#i-new"></use></svg>
+          <span class="btn-label">Nuevo</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel measure-panel" aria-labelledby="measureTitle">
+        <div class="panel-head">
+          <h2 id="measureTitle">Medición</h2>
+          <span class="panel-kicker">3 métodos</span>
+        </div>
+
+        <div class="mode-tabs" role="tablist" aria-label="Método de medición">
+          <button class="mode-tab is-active" id="tab-gps" type="button" data-mode="gps" role="tab" aria-selected="true" aria-controls="panel-gps">
+            <svg class="icon" aria-hidden="true"><use href="#i-gps"></use></svg><span>GPS</span>
+          </button>
+          <button class="mode-tab" id="tab-linderos" type="button" data-mode="linderos" role="tab" aria-selected="false" aria-controls="panel-linderos" tabindex="-1">
+            <svg class="icon" aria-hidden="true"><use href="#i-ruler"></use></svg><span>Linderos</span>
+          </button>
+          <button class="mode-tab" id="tab-coords" type="button" data-mode="coords" role="tab" aria-selected="false" aria-controls="panel-coords" tabindex="-1">
+            <svg class="icon" aria-hidden="true"><use href="#i-polygon"></use></svg><span>Coordenadas</span>
+          </button>
+        </div>
+
+        <!-- GPS -->
+        <div class="mode-panel" id="panel-gps" role="tabpanel" aria-labelledby="tab-gps">
+          <div class="mode-intro">
+            <span class="step-num">01</span>
+            <p>Camina por el lindero con el teléfono en alto. Se guarda un vértice cuando la precisión es buena y avanzas la distancia mínima.</p>
+          </div>
+
+          <div class="gps-status" id="gpsStatus">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div class="gps-status-copy">
+              <strong id="gpsStatusTitle">GPS en espera</strong>
+              <span id="gpsStatusText">Inicia el recorrido al llegar a una esquina.</span>
+            </div>
+            <span class="accuracy-pill" id="gpsAccuracy">± — m</span>
+          </div>
+
+          <div class="field-row">
+            <label class="field">Precisión mínima
+              <select id="gpsThreshold">
+                <option value="3">± 3 m (exigente)</option>
+                <option value="5">± 5 m</option>
+                <option value="8" selected>± 8 m</option>
+                <option value="10">± 10 m</option>
+                <option value="15">± 15 m (abierto)</option>
+              </select>
+            </label>
+            <label class="field">Separación mínima
+              <span class="unit-field">
+                <input id="gpsMinDistance" type="text" value="3" min="1" max="50" step="1" inputmode="numeric">
+                <span>m</span>
+              </span>
+            </label>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="gpsToggle" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-play"></use></svg>
+            <span id="gpsToggleText">Iniciar recorrido</span>
+          </button>
+
+          <div class="btn-row">
+            <button class="btn btn-outline" id="gpsFinish" type="button" disabled>
+              <svg class="icon" aria-hidden="true"><use href="#i-stop"></use></svg>
+              <span>Finalizar</span>
+            </button>
+            <button class="btn btn-ghost" id="gpsSimplify" type="button" disabled>
+              <svg class="icon" aria-hidden="true"><use href="#i-fit"></use></svg>
+              <span>Simplificar</span>
+            </button>
+          </div>
+
+          <div class="metrics">
+            <div><span>Puntos</span><strong id="gpsPoints">0</strong></div>
+            <div><span>Precisión media</span><strong id="gpsAverage">—</strong></div>
+            <div><span>Tiempo</span><strong id="gpsTimer">00:00</strong></div>
+          </div>
+
+          <p class="micro tip"><svg class="icon" aria-hidden="true"><use href="#i-gps"></use></svg> El GPS del teléfono es orientativo (± 3 a 10 m). Repite el recorrido y registra cada área para estimar la incertidumbre del plano.</p>
+        </div>
+
+        <!-- Linderos -->
+        <div class="mode-panel" id="panel-linderos" role="tabpanel" aria-labelledby="tab-linderos" hidden>
+          <div class="mode-intro">
+            <span class="step-num">02</span>
+            <p>Mide con cinta o estación total. La app calcula la superficie y dibuja el croquis a escala en la ubicación que indiques.</p>
+          </div>
+
+          <div class="segmented" id="shapeTabs" role="group" aria-label="Tipo de figura">
+            <button type="button" class="is-active" data-shape="quad">Cuadrilátero</button>
+            <button type="button" data-shape="triangle">Triángulo</button>
+            <button type="button" data-shape="rect">Rectángulo</button>
+            <button type="button" data-shape="circle">Círculo</button>
+          </div>
+
+          <form id="shapeForm" novalidate>
+            <div class="shape-fields" data-shape-fields="quad">
+              <div class="field-grid-2">
+                <label class="field">Lado A–B<span class="unit-field"><input type="text" data-quad="ab" value="182,40" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+                <label class="field">Lado B–C<span class="unit-field"><input type="text" data-quad="bc" value="136,75" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+                <label class="field">Lado C–D<span class="unit-field"><input type="text" data-quad="cd" value="182,10" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+                <label class="field">Lado D–A<span class="unit-field"><input type="text" data-quad="da" value="136,95" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+                <label class="field span-2">Diagonal A–C<span class="unit-field"><input type="text" data-quad="ac" value="228,20" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+              </div>
+            </div>
+
+            <div class="shape-fields" data-shape-fields="triangle" hidden>
+              <div class="field-grid-2">
+                <label class="field">Lado A–B<span class="unit-field"><input type="text" data-tri="ab" value="248,60" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+                <label class="field">Lado B–C<span class="unit-field"><input type="text" data-tri="bc" value="196,30" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+                <label class="field span-2">Lado C–A<span class="unit-field"><input type="text" data-tri="ca" value="232,75" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+              </div>
+            </div>
+
+            <div class="shape-fields" data-shape-fields="rect" hidden>
+              <div class="field-grid-2">
+                <label class="field">Frente<span class="unit-field"><input type="text" data-rect="width" value="182,40" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+                <label class="field">Fondo<span class="unit-field"><input type="text" data-rect="height" value="136,60" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+              </div>
+            </div>
+
+            <div class="shape-fields" data-shape-fields="circle" hidden>
+              <label class="field">Radio<span class="unit-field"><input type="text" data-circle="radius" value="89,40" min="0.1" step="0.01" inputmode="decimal"><span>m</span></span></label>
+            </div>
+
+            <div class="shape-preview" id="shapePreview">
+              <div><span>Área calculada</span><strong id="shapeArea">2,4940 ha</strong></div>
+              <div><span>Perímetro</span><strong id="shapePerimeter">638,20 m</strong></div>
+            </div>
+            <p class="form-error" id="shapeError" hidden></p>
+
+            <div class="origin-box">
+              <div class="origin-head">
+                <span class="block-label">Ubicación del plano</span>
+                <button class="mini-btn" id="originGps" type="button">
+                  <svg class="icon" aria-hidden="true"><use href="#i-gps"></use></svg> Usar mi GPS
+                </button>
+              </div>
+              <div class="field-grid-2">
+                <label class="field">Latitud<input id="originLat" type="text" inputmode="decimal" placeholder="-34,901200" autocomplete="off" spellcheck="false"></label>
+                <label class="field">Longitud<input id="originLon" type="text" inputmode="decimal" placeholder="-60,301100" autocomplete="off" spellcheck="false"></label>
+              </div>
+              <p class="micro">Coordenada donde se ancla el croquis, en grados decimales WGS 84. Si queda vacía se usa la última ubicación.</p>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="shapeApply" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#i-polygon"></use></svg>
+              <span>Dibujar en el croquis</span>
+            </button>
+          </form>
+
+          <p class="micro tip"><svg class="icon" aria-hidden="true"><use href="#i-ruler"></use></svg> En un cuadrilátero, la diagonal A–C divide el predio en dos triángulos. Ambas medidas deben ser compatibles o el croquis no es válido.</p>
+        </div>
+
+        <!-- Coordenadas -->
+        <div class="mode-panel" id="panel-coords" role="tabpanel" aria-labelledby="tab-coords" hidden>
+          <div class="mode-intro">
+            <span class="step-num">03</span>
+            <p>Escribe los vértices en orden, en sentido horario o antihorario. Las coordenadas deben estar en grados decimales (WGS 84).</p>
+          </div>
+
+          <div class="field-grid-2">
+            <label class="field">Latitud
+              <input id="coordLat" type="text" inputmode="decimal" placeholder="-34,901200" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="field">Longitud
+              <input id="coordLon" type="text" inputmode="decimal" placeholder="-60,301100" autocomplete="off" spellcheck="false">
+            </label>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" id="coordAdd" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+              <span>Añadir vértice</span>
+            </button>
+            <button class="btn btn-outline" id="coordLocate" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#i-gps"></use></svg>
+              <span>Usar mi GPS</span>
+            </button>
+          </div>
+          <p class="form-error" id="coordError" hidden></p>
+
+          <details class="import-box">
+            <summary>Importar una lista de coordenadas</summary>
+            <textarea id="coordImport" rows="5" aria-label="Lista de coordenadas para importar" placeholder="-34.901200, -60.301100&#10;-34.899800, -60.301300&#10;-34.899900, -60.299600&#10;-34.901300, -60.299500" spellcheck="false"></textarea>
+            <p class="micro">Un vértice por línea. Acepta <b>lat, lon</b>, <b>lat; lon</b> o valores separados por espacios.</p>
+            <div class="btn-row">
+              <button class="btn btn-outline" id="coordAppend" type="button">Añadir al final</button>
+              <button class="btn btn-ghost" id="coordReplace" type="button">Reemplazar croquis</button>
+            </div>
+            <p class="form-error" id="importError" hidden></p>
+          </details>
+
+          <p class="micro tip"><svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg> El orden importa: si el polígono se cruza, el área no será confiable. Puedes deshacer con el botón de la barra del croquis.</p>
+        </div>
+      </section>
+
+      <section class="panel map-panel" aria-labelledby="mapTitle">
+        <div class="panel-head map-head">
+          <div>
+            <h2 id="mapTitle">Croquis del predio</h2>
+            <p class="map-sub" id="mapSubtitle">4 vértices · Demostración</p>
+          </div>
+          <div class="map-readout" aria-live="polite">
+            <strong id="mapArea">2,4816 ha</strong>
+            <span id="mapPerimeter">641,21 m de perímetro</span>
+          </div>
+        </div>
+
+        <div class="map-stage" id="mapStage">
+          <canvas id="mapCanvas" aria-label="Croquis a escala del predio medido con coordenadas geográficas"></canvas>
+
+          <div class="map-tools" role="toolbar" aria-label="Herramientas del croquis">
+            <button type="button" data-map="undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer"><svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg></button>
+            <button type="button" data-map="redo" title="Rehacer (Ctrl+Y)" aria-label="Rehacer"><svg class="icon" aria-hidden="true"><use href="#i-redo"></use></svg></button>
+            <span class="tool-sep" aria-hidden="true"></span>
+            <button type="button" data-map="zoom-out" title="Alejar" aria-label="Alejar"><svg class="icon" aria-hidden="true"><use href="#i-minus"></use></svg></button>
+            <button type="button" data-map="zoom-in" title="Acercar" aria-label="Acercar"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+            <button type="button" data-map="fit" title="Ajustar a pantalla" aria-label="Ajustar a pantalla"><svg class="icon" aria-hidden="true"><use href="#i-fit"></use></svg></button>
+            <span class="tool-sep" aria-hidden="true"></span>
+            <button type="button" data-map="labels" class="is-on" aria-pressed="true" title="Mostrar u ocultar medidas" aria-label="Mostrar medidas"><svg class="icon" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+            <button type="button" data-map="grid" class="is-on" aria-pressed="true" title="Mostrar u ocultar coordenadas" aria-label="Mostrar coordenadas"><svg class="icon" aria-hidden="true"><use href="#i-grid"></use></svg></button>
+          </div>
+
+          <div class="map-warning" id="mapWarning" role="alert" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+            <span>El polígono se cruza. Revisa el orden de los vértices.</span>
+          </div>
+
+          <div class="empty-state" id="mapEmpty" hidden>
+            <svg class="empty-icon" viewBox="0 0 48 48" aria-hidden="true">
+              <path d="M24 5 43 18l-7 24H12L5 23 24 5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 4"/>
+              <circle cx="24" cy="24" r="2.5" fill="currentColor"/>
+            </svg>
+            <h3>Aún no hay un croquis</h3>
+            <p>Inicia un recorrido GPS, define los linderos con cinta o carga un ejemplo demostrativo.</p>
+            <button class="btn btn-primary" id="loadDemoBtn" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#i-polygon"></use></svg>
+              <span id="loadDemoText">Cargar ejemplo demostrativo</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="map-foot">
+          <span id="mapHint" class="map-hint">Arrastra para mover · rueda para acercar</span>
+          <span class="map-coords" id="mapCoords">—</span>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel result-panel" aria-labelledby="resultTitle">
+          <div class="result-head">
+            <h2 id="resultTitle" class="eyebrow">Superficie medida</h2>
+            <span class="method-badge" id="methodBadge"><i></i><span>Demostración</span></span>
+          </div>
+
+          <div class="area-line">
+            <span class="area-value" id="areaHa">2,4816</span>
+            <span class="area-unit">ha</span>
+          </div>
+          <div class="area-sub">
+            <span id="areaM2">24.816 m²</span><span class="sep">·</span>
+            <span id="perimeter">641,21 m</span><span class="sep">·</span>
+            <span id="vertexCount">4 vértices</span>
+          </div>
+
+          <p class="gps-precision" id="gpsPrecision" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-gps"></use></svg>
+            <span>Precisión GPS media <b id="gpsAverageValue">± 0 m</b>. El área puede variar al repetir el recorrido.</span>
+          </p>
+
+          <div class="reference">
+            <div class="reference-head">
+              <span class="block-label">Área de referencia</span>
+              <span class="ref-input">
+                <input id="refArea" type="text" inputmode="decimal" placeholder="—" aria-label="Área de referencia en hectáreas" autocomplete="off" spellcheck="false">
+                <em>ha</em>
+              </span>
+            </div>
+            <label class="field field-compact">Fuente
+              <select id="refSource">
+                <option value="">Sin especificar</option>
+                <option value="Escritura / Título">Escritura / Título</option>
+                <option value="Catastro">Catastro</option>
+                <option value="Medición anterior">Medición anterior</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </label>
+            <div class="ref-result is-empty" id="refResult">
+              <span>Diferencia</span>
+              <strong id="refDiffHa">—</strong>
+              <span id="refDiffPct">—</span>
+            </div>
+            <p class="micro" id="refHint">Opcional. La referencia no limita la medición: sirve para rectificar el área del título o del catastro.</p>
+          </div>
+
+          <div class="repetitions">
+            <div class="rep-head">
+              <span class="block-label">Repeticiones</span>
+              <button class="mini-btn" id="repAdd" type="button" disabled>Guardar área actual</button>
+            </div>
+            <div class="rep-list" id="repList"><span class="rep-empty">Sin repeticiones guardadas.</span></div>
+            <div class="uncert" id="uncertBox">
+              <div class="uncert-line">
+                <span>Media</span>
+                <strong id="repMean">—</strong>
+                <span class="uncert-pm">±</span>
+                <strong id="repU">—</strong>
+                <span class="uncert-tag">U 95 %</span>
+              </div>
+              <p id="repDetail">Guarda al menos dos mediciones del mismo predio para estimar la incertidumbre.</p>
+            </div>
+          </div>
+
+          <details class="notes-box" id="notesBox">
+            <summary>Observaciones del levantamiento</summary>
+            <textarea id="notes" rows="3" maxlength="1200" placeholder="Cultivo, estado del lindero, referencias, observaciones del avalúo…"></textarea>
+          </details>
+
+          <p class="hash-line"><span>Huella SHA-256</span> <code id="projectHash">—</code></p>
+        </section>
+
+        <section class="panel cases-panel" aria-labelledby="casesTitle">
+          <div class="panel-head">
+            <h2 id="casesTitle">Casos guardados</h2>
+            <span class="panel-kicker" id="casesCount">0 casos</span>
+          </div>
+          <p class="cases-intro">Cada caso guarda su croquis, lotes, fotos y observaciones. Toca uno para abrirlo; los cambios se guardan solos.</p>
+          <div class="case-list" id="caseList"></div>
+          <div class="case-actions">
+            <button class="btn btn-outline" id="caseSave" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg>
+              <span>Guardar ahora</span>
+            </button>
+            <button class="btn btn-primary" id="caseNew" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#i-new"></use></svg>
+              <span>Nuevo caso</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="panel lots-panel" aria-labelledby="lotsTitle">
+          <div class="panel-head">
+            <h2 id="lotsTitle">Lotes y cultivos</h2>
+            <span class="panel-kicker" id="lotsSummary">Sin lotes</span>
+          </div>
+          <form id="lotForm" class="lot-form" novalidate>
+            <div class="lot-form-grid">
+              <label class="field">Lote<input id="lotName" type="text" maxlength="40" placeholder="Lote 1" autocomplete="off"></label>
+              <label class="field">Cultivo<input id="lotCrop" type="text" maxlength="40" placeholder="Soja" autocomplete="off"></label>
+              <label class="field">Superficie<span class="unit-field"><input id="lotArea" type="text" inputmode="decimal" placeholder="0,00"><span>ha</span></span></label>
+              <button class="btn btn-primary lot-add" id="lotAdd" type="submit">Añadir</button>
+            </div>
+            <p class="form-error" id="lotError" hidden></p>
+          </form>
+          <div class="table-wrap lot-wrap">
+            <table>
+              <thead>
+                <tr><th>Lote / cultivo</th><th>Superficie</th><th>%</th><th><span class="sr-only">Acciones</span></th></tr>
+              </thead>
+              <tbody id="lotsBody"></tbody>
+            </table>
+          </div>
+          <p class="table-note lot-balance" id="lotBalance">Sin lotes declarados.</p>
+        </section>
+
+        <section class="panel sides-panel" aria-labelledby="sidesTitle">
+          <div class="panel-head">
+            <h2 id="sidesTitle">Vértices y linderos</h2>
+            <span class="panel-kicker" id="sideCount">4 lados</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Vértice</th><th>Coordenadas WGS 84</th><th>Lado</th><th>Rumbo</th><th><span class="sr-only">Acciones</span></th></tr>
+              </thead>
+              <tbody id="sidesBody"></tbody>
+            </table>
+          </div>
+          <p class="table-note">Coordenadas en grados decimales, datum WGS 84 (EPSG:4326). Rumbo medido desde el norte. Elimina un vértice con el icono de la papelera.</p>
+        </section>
+
+        <section class="panel photos-panel" aria-labelledby="photosTitle">
+          <div class="panel-head">
+            <h2 id="photosTitle">Fotos del predio</h2>
+            <span class="panel-kicker" id="photoCount">0 / 8</span>
+          </div>
+          <div class="photo-actions">
+            <label class="btn btn-outline" for="photoInput">
+              <svg class="icon" aria-hidden="true"><use href="#i-camera"></use></svg>
+              Añadir foto
+            </label>
+            <input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
+            <span class="micro">Se comprimen y guardan en este dispositivo.</span>
+          </div>
+          <div class="photo-grid" id="photoGrid"></div>
+          <p class="form-error" id="photoError" hidden></p>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="site-foot">
+      <div>
+        <p><strong>CAMPO VERDE JRB</strong> · Medición y rectificación de áreas de predios y cultivos.</p>
+        <p class="brand-line">AVALÚOS INTEGRALES · Urbanos &amp; Rurales</p>
+      </div>
+      <div class="foot-right">
+        <p>Medición orientativa. Para escrituración o trámites legales, consulta a un agrimensor con GNSS/RTK.</p>
+        <p class="offline"><span class="offline-dot"></span> Funciona sin conexión · Datos en este dispositivo</p>
+      </div>
+    </footer>
+  </div>
+
+  <dialog id="confirmDialog" aria-labelledby="dialogTitle" aria-describedby="dialogText">
+    <form method="dialog">
+      <div class="dialog-body">
+        <h2 id="dialogTitle">Confirmar</h2>
+        <p id="dialogText"></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" value="cancel" type="submit" id="dialogCancel">Cancelar</button>
+        <button class="btn btn-primary" value="confirm" type="submit" id="dialogConfirm">Aceptar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <input id="restoreInput" type="file" accept=".json,application/json" hidden>
+  <section id="printReport" class="print-report" aria-hidden="true"></section>
+
+  <script src="app.js"></script>
+</body>
+</html>
