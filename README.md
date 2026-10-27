@@ -4,6 +4,14 @@ Aplicación web instalable en el móvil para **medir, documentar y rectificar su
 
 **AVALÚOS INTEGRALES · Urbanos & Rurales**
 
+## Enlace publicado
+
+**https://jobon31-commits.github.io/campo-verde-jrb/**
+
+Repositorio: **https://github.com/jobon31-commits/campo-verde-jrb**
+
+Abre el enlace en el móvil e instálala como PWA (ver más abajo).
+
 ## Qué hace
 
 - **Tres métodos de medición**
