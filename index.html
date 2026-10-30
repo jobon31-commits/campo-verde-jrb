@@ -41,6 +41,8 @@
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 21 19H3l9-15.5Z"/><path d="M12 9v4.5M12 16.5v.2"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6-5.4 6-10.5a6 6 0 1 0-12 0C6 15.6 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2.2"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11.5" height="11.5" rx="1.6"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></symbol>
+    <symbol id="i-volume-off" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="m16 9 5 6M21 9l-5 6"/></symbol>
     <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3.5h10V9M7 17H4.5A1.5 1.5 0 0 1 3 15.5v-5A1.5 1.5 0 0 1 4.5 9h15a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H17"/><rect x="7" y="14" width="10" height="6.5" rx="1"/></symbol>
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.5h3l1.5-2h7L17 8.5h3a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/></symbol>
     <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3.5h11L20.5 8v12.5h-16v-17Z"/><path d="M8 3.5v5h7v-5M8 20.5v-6h8v6"/></symbol>
@@ -120,7 +122,7 @@
         <div class="mode-panel" id="panel-gps" role="tabpanel" aria-labelledby="tab-gps">
           <div class="mode-intro">
             <span class="step-num">01</span>
-            <p>Camina por el lindero con el teléfono en alto. Se guarda un vértice cuando la precisión es buena y avanzas la distancia mínima.</p>
+            <p>Camina por el lindero con el teléfono en alto. Se guarda un vértice cuando la precisión es buena y avanzas la distancia mínima. Si una esquina no se marca sola, pulsa <b>Marcar vértice</b>.</p>
           </div>
 
           <div class="gps-status" id="gpsStatus">
@@ -130,6 +132,25 @@
               <span id="gpsStatusText">Inicia el recorrido al llegar a una esquina.</span>
             </div>
             <span class="accuracy-pill" id="gpsAccuracy">± — m</span>
+          </div>
+
+          <div class="gps-fix" id="gpsFix" hidden>
+            <div class="gps-fix-head">
+              <span class="gps-fix-label" id="gpsFixLabel">Posición GPS</span>
+              <span class="gps-fix-accuracy" id="gpsFixAccuracy">± — m</span>
+              <button class="mini-btn" id="gpsCopy" type="button" title="Copiar la posición actual" aria-label="Copiar coordenadas de la posición actual">
+                <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg> Copiar
+              </button>
+            </div>
+            <strong class="gps-fix-coords" id="gpsFixCoords">—</strong>
+            <span class="gps-fix-dms" id="gpsFixDms">—</span>
+            <div class="gps-last" id="gpsLast" hidden aria-live="polite">
+              <span class="gps-last-label">Último vértice <b id="gpsLastLabel">A</b></span>
+              <code id="gpsLastCoords">—</code>
+              <button class="gps-last-copy" id="gpsLastCopy" type="button" title="Copiar coordenadas del último vértice" aria-label="Copiar coordenadas del último vértice">
+                <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>
+              </button>
+            </div>
           </div>
 
           <div class="field-row">
@@ -155,6 +176,11 @@
             <span id="gpsToggleText">Iniciar recorrido</span>
           </button>
 
+          <button class="btn btn-mark btn-block" id="gpsMark" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>
+            <span id="gpsMarkText">Marcar vértice</span>
+          </button>
+
           <div class="btn-row">
             <button class="btn btn-outline" id="gpsFinish" type="button" disabled>
               <svg class="icon" aria-hidden="true"><use href="#i-stop"></use></svg>
@@ -166,13 +192,19 @@
             </button>
           </div>
 
+          <label class="sound-toggle" for="gpsSound">
+            <input id="gpsSound" type="checkbox" checked>
+            <svg class="icon" aria-hidden="true"><use id="gpsSoundIcon" href="#i-volume"></use></svg>
+            <span id="gpsSoundText">Sonido al marcar</span>
+          </label>
+
           <div class="metrics">
             <div><span>Puntos</span><strong id="gpsPoints">0</strong></div>
             <div><span>Precisión media</span><strong id="gpsAverage">—</strong></div>
             <div><span>Tiempo</span><strong id="gpsTimer">00:00</strong></div>
           </div>
 
-          <p class="micro tip"><svg class="icon" aria-hidden="true"><use href="#i-gps"></use></svg> El GPS del teléfono es orientativo (± 3 a 10 m). Repite el recorrido y registra cada área para estimar la incertidumbre del plano.</p>
+          <p class="micro tip"><svg class="icon" aria-hidden="true"><use href="#i-gps"></use></svg> Cada vértice vibra y suena al guardarse. El GPS del teléfono es orientativo (± 3 a 10 m): repite el recorrido y registra cada área para estimar la incertidumbre del plano.</p>
         </div>
 
         <!-- Linderos -->

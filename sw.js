@@ -1,7 +1,7 @@
 /* CAMPO VERDE JRB · servicio sin conexión */
 "use strict";
 
-const CACHE_NAME = "campoverdejr-v3";
+const CACHE_NAME = "campoverdejr-v5";
 const APP_SHELL = [
   "./",
   "./index.html",

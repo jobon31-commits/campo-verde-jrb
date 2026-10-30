@@ -15,7 +15,7 @@ Abre el enlace en el móvil e instálala como PWA (ver más abajo).
 ## Qué hace
 
 - **Tres métodos de medición**
-  1. **GPS:** recorrido del lindero con el teléfono, con filtro de precisión y distancia mínima entre vértices.
+  1. **GPS:** recorrido del lindero con el teléfono, con filtro de precisión y distancia mínima entre vértices. El botón **Marcar vértice** fuerza el punto en la posición actual, muestra sus coordenadas (decimales y DMS), permite copiarlas y confirma con vibración y sonido. Si una esquina no se marca sola, este botón la registra.
   2. **Linderos:** cálculos a partir de medidas de cinta o estación total (cuadrilátero con diagonal, triángulo, rectángulo o círculo). El croquis se ancla en la **ubicación del plano** que indiques (latitud/longitud WGS 84) o en tu posición GPS actual.
   3. **Coordenadas:** carga manual o importación de una lista en grados decimales WGS 84.
 
@@ -43,6 +43,7 @@ El croquis es una vista local en proyección equirectangular, adecuada para pred
 - Caja **«UBICACIÓN DEL PLANO»** con las coordenadas del centroide.
 - Lectura de coordenadas del puntero en el pie del croquis.
 - Marcador **REF** en el centroide, escala gráfica, norte y control de capas (medidas y grilla).
+- El **último vértice marcado** se resalta con un anillo ámbar y sus coordenadas quedan visibles en el panel GPS.
 - Al añadir un vértice se conserva la escala y el centro de la vista; el croquis solo se desplaza lo necesario para mostrar el punto nuevo. Esto evita el zoom y los saltos bruscos.
 
 Las coordenadas se muestran en **grados decimales y DMS, datum WGS 84 (EPSG:4326)**.

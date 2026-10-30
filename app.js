@@ -15,6 +15,7 @@
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
   const CASES_KEY = "campoverdejr.cases.v1";
+  const SOUND_KEY = "campoverdejr.sound.v1";
   const MAX_CASES = 15;
   const DEMO_REF = { lat: -34.9012, lon: -60.3011 };
   const DEMO_LOCALS = [[-95, -66], [95, -66], [88, 66], [-98, 66]];
@@ -476,12 +477,18 @@
     paused: false,
     watchId: null,
     lastFix: null,
+    lastMark: null,
+    manualBusy: false,
+    session: 0,
     elapsed: 0,
     segmentStart: 0,
     timer: null,
     wakeLock: null,
     rejected: 0,
   };
+  let soundOn = true;
+  let audioCtx = null;
+  let lastToneAt = 0;
   let activeMode = "gps";
   let shapeType = "quad";
   let labelsOn = true;
@@ -526,6 +533,21 @@
     gpsPoints: $("#gpsPoints"),
     gpsAverage: $("#gpsAverage"),
     gpsTimer: $("#gpsTimer"),
+    gpsMark: $("#gpsMark"),
+    gpsMarkText: $("#gpsMarkText"),
+    gpsFix: $("#gpsFix"),
+    gpsFixLabel: $("#gpsFixLabel"),
+    gpsFixAccuracy: $("#gpsFixAccuracy"),
+    gpsFixCoords: $("#gpsFixCoords"),
+    gpsFixDms: $("#gpsFixDms"),
+    gpsCopy: $("#gpsCopy"),
+    gpsLast: $("#gpsLast"),
+    gpsLastLabel: $("#gpsLastLabel"),
+    gpsLastCoords: $("#gpsLastCoords"),
+    gpsLastCopy: $("#gpsLastCopy"),
+    gpsSound: $("#gpsSound"),
+    gpsSoundText: $("#gpsSoundText"),
+    gpsSoundIcon: $("#gpsSoundIcon"),
     shapeTabs: $$("#shapeTabs button"),
     shapeErrors: $("#shapeError"),
     shapeArea: $("#shapeArea"),
@@ -978,6 +1000,7 @@
 
     state.points = clonePoints(points);
     if (method) state.method = method;
+    if (method && method !== "gps") gps.lastMark = null;
     if (options.ref !== undefined) {
       state.ref = options.ref ? { ...options.ref } : null;
     } else if (!state.ref && state.points.length) {
@@ -1105,6 +1128,8 @@
     renderMap(metrics);
     updateGpsMetrics(metrics);
     updateGpsButtons();
+    updateFixDisplay();
+    updateLastVertexDisplay();
     updateHistoryButtons();
     syncOriginInputs();
     reportDirty = true;
@@ -1803,6 +1828,20 @@
       ctx.restore();
     });
 
+    const markedIndex = validMarkIndex();
+    if (markedIndex >= 0 && points[markedIndex]) {
+      const point = points[markedIndex];
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 9.5, 0, Math.PI * 2);
+      ctx.strokeStyle = "#b47c22";
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     if (n === 1) {
       ctx.save();
       ctx.beginPath();
@@ -2052,6 +2091,214 @@
       : "± — m");
   }
 
+  function formatCoordPair(lat, lon) {
+    return `${fmt(lat, 6)} · ${fmt(lon, 6)}`;
+  }
+
+  function formatCoordCopy(lat, lon) {
+    return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  }
+
+  function validMarkIndex() {
+    const mark = gps.lastMark;
+    const point = mark ? state.points[mark.index] : null;
+    if (!point || Math.abs(point.lat - mark.lat) > 1e-9 || Math.abs(point.lon - mark.lon) > 1e-9) {
+      return -1;
+    }
+    return mark.index;
+  }
+
+  function updateFixDisplay() {
+    const fix = gps.lastFix;
+    if (!fix) {
+      el.gpsFix.hidden = true;
+      return;
+    }
+    el.gpsFix.hidden = false;
+    setText(el.gpsFixLabel, gps.active || gps.paused ? "Posición GPS" : "Última posición");
+    setText(el.gpsFixCoords, formatCoordPair(fix.lat, fix.lon));
+    setText(el.gpsFixDms, `${formatCoordDms(fix.lat, true, 1)} · ${formatCoordDms(fix.lon, false, 1)}`);
+    const hasAccuracy = Number.isFinite(fix.accuracy);
+    setText(el.gpsFixAccuracy, hasAccuracy ? `± ${fmt(fix.accuracy, 1)} m` : "sin precisión");
+    const threshold = clamp(parseDecimal(el.gpsThreshold.value) || 8, 0.5, 100);
+    el.gpsFixAccuracy.classList.toggle("is-poor", !hasAccuracy || fix.accuracy > threshold);
+    el.gpsCopy.disabled = false;
+  }
+
+  function updateLastVertexDisplay() {
+    const index = validMarkIndex();
+    if (index < 0) {
+      if (gps.lastMark) gps.lastMark = null;
+      el.gpsLast.hidden = true;
+      return;
+    }
+    const point = state.points[index];
+    el.gpsLast.hidden = false;
+    setText(el.gpsLastLabel, vertexLabel(index));
+    setText(el.gpsLastCoords, formatCoordPair(point.lat, point.lon));
+  }
+
+  function clearGpsReadout() {
+    gps.lastFix = null;
+    gps.lastMark = null;
+    gps.manualBusy = false;
+    el.gpsFix.hidden = true;
+    el.gpsLast.hidden = true;
+    updateAccuracyPill();
+  }
+
+  function ensureAudio() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    try {
+      if (!audioCtx || audioCtx.state === "closed") audioCtx = new Ctx();
+      if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+      return audioCtx;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function playTone(ctx, frequency, start, duration, volume) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + duration + 0.03);
+  }
+
+  function playVertexSound(manual) {
+    if (!soundOn) return;
+    const now = Date.now();
+    if (!manual && now - lastToneAt < 300) return;
+    lastToneAt = now;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const start = ctx.currentTime + 0.01;
+    if (manual) {
+      playTone(ctx, 880, start, 0.09, 0.18);
+      playTone(ctx, 1318.5, start + 0.11, 0.12, 0.16);
+      return;
+    }
+    playTone(ctx, 1180, start, 0.045, 0.09);
+  }
+
+  function playTestSound() {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    playTone(ctx, 990, ctx.currentTime + 0.01, 0.08, 0.12);
+  }
+
+  function announceVertex(manual) {
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(manual ? [45, 55, 45] : 35);
+      } catch (error) {
+        /* La vibración no es crítica. */
+      }
+    }
+    playVertexSound(Boolean(manual));
+  }
+
+  function updateSoundToggle() {
+    if (!el.gpsSound) return;
+    el.gpsSound.checked = soundOn;
+    const box = el.gpsSound.closest(".sound-toggle");
+    if (box) box.classList.toggle("is-off", !soundOn);
+    setText(el.gpsSoundText, soundOn ? "Sonido al marcar" : "Sonido silenciado");
+    if (el.gpsSoundIcon) el.gpsSoundIcon.setAttribute("href", soundOn ? "#i-volume" : "#i-volume-off");
+  }
+
+  function loadSoundPreference() {
+    try {
+      soundOn = localStorage.getItem(SOUND_KEY) !== "off";
+    } catch (error) {
+      soundOn = true;
+    }
+    updateSoundToggle();
+  }
+
+  function setSoundOn(on) {
+    soundOn = Boolean(on);
+    try {
+      localStorage.setItem(SOUND_KEY, soundOn ? "on" : "off");
+    } catch (error) {
+      /* Sin persistencia: la preferencia dura la sesión. */
+    }
+    updateSoundToggle();
+    if (soundOn) {
+      ensureAudio();
+      playTestSound();
+    }
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (error) {
+      /* Probamos el método clásico. */
+    }
+    try {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.top = "-1000px";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      return ok;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function copyCoordinates(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const text = formatCoordCopy(lat, lon);
+    const ok = await copyText(text);
+    showToast(ok ? `Coordenadas copiadas: ${text}` : `No se pudo copiar. Coordenadas: ${text}`, ok ? 2600 : 4600);
+  }
+
+  function requestCurrentPosition() {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords = position.coords;
+          resolve({
+            lat: coords.latitude,
+            lon: coords.longitude,
+            accuracy: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
+            at: Date.now(),
+          });
+        },
+        reject,
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    });
+  }
+
+  function describeGpsError(error) {
+    if (error && error.code === 1) {
+      return ["Permiso denegado", "Autoriza la ubicación en el navegador para marcar vértices."];
+    }
+    if (error && error.code === 3) {
+      return ["GPS lento", "La señal tardó demasiado. Mantén el teléfono con vista al cielo e inténtalo de nuevo."];
+    }
+    return ["Sin señal GPS", "No se pudo obtener la posición. Sal a un espacio abierto o espera unos segundos."];
+  }
+
   function updateGpsButtons() {
     setText(el.gpsToggleText, gps.active ? "Pausar" : gps.paused ? "Reanudar" : "Iniciar recorrido");
     el.gpsToggleIcon.setAttribute("href", gps.active ? "#i-pause" : "#i-play");
@@ -2091,6 +2338,7 @@
 
   function stopGpsForManual() {
     if (!(gps.active || gps.paused)) return;
+    gps.session += 1;
     if (gps.active) gps.elapsed += Date.now() - gps.segmentStart;
     gps.active = false;
     gps.paused = false;
@@ -2113,19 +2361,46 @@
     }
   }
 
-  function addGpsPoint(lat, lon, accuracy) {
+  function addGpsPoint(lat, lon, accuracy, options = {}) {
+    const manual = Boolean(options.manual);
+    const index = state.points.length;
+    gps.lastMark = {
+      index,
+      lat,
+      lon,
+      accuracy: Number.isFinite(accuracy) ? accuracy : null,
+      at: Date.now(),
+    };
     const next = [...state.points, { lat, lon, acc: Number.isFinite(accuracy) ? accuracy : null }];
     applyPoints(next, "gps", { fit: false, follow: { lat, lon } });
-    if (navigator.vibrate) navigator.vibrate(35);
+    updateLastVertexDisplay();
+    announceVertex(manual);
+
     const metrics = computeMetrics();
     const minDistance = Math.max(2, parseDecimal(el.gpsMinDistance.value) || 3);
     const nearStart = metrics.n >= 3 && haversine(state.points[0], state.points[state.points.length - 1]) < minDistance;
+    const threshold = clamp(parseDecimal(el.gpsThreshold.value) || 8, 0.5, 100);
+    const lowAccuracy = !Number.isFinite(accuracy) || accuracy > threshold;
+    const label = vertexLabel(index);
+    const accuracyText = Number.isFinite(accuracy) ? `± ${fmt(accuracy, 1)} m` : "sin dato de precisión";
+
+    if (manual) {
+      setGpsStatus(
+        lowAccuracy ? "warn" : "live",
+        lowAccuracy ? `Vértice ${label} marcado · precisión baja` : `Vértice ${label} marcado`,
+        lowAccuracy
+          ? `${formatCoordPair(lat, lon)} · ${accuracyText}. Si puedes, repítelo en un lugar más abierto.`
+          : `${formatCoordPair(lat, lon)} · ${accuracyText}. ${nearStart && (gps.active || gps.paused) ? "Estás cerca del inicio; pulsa Finalizar." : "Sigue el lindero o marca la próxima esquina."}`
+      );
+      return;
+    }
+
     setGpsStatus(
       "live",
       nearStart ? "De vuelta al inicio" : `Recorriendo · ${metrics.n} puntos`,
       nearStart
         ? "Estás cerca del punto de partida. Pulsa Finalizar para cerrar el recorrido."
-        : `Último punto ± ${fmt(accuracy, 1)} m. Sigue el lindero y marca cada esquina.`
+        : `Último punto ${accuracyText}. Sigue el lindero y marca cada esquina.`
     );
   }
 
@@ -2136,10 +2411,12 @@
       lat: coords.latitude,
       lon: coords.longitude,
       accuracy: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
+      at: Date.now(),
     };
     updateAccuracyPill();
+    updateFixDisplay();
 
-    if (gps.paused) {
+    if (gps.paused || gps.manualBusy) {
       redrawMap();
       return;
     }
@@ -2154,7 +2431,7 @@
       setGpsStatus(
         "warn",
         "Esperando mejor precisión",
-        `Señal actual ${shown}; necesitas ≤ ± ${fmt(threshold, 0)} m. Busca un lugar abierto y espera unos segundos.`
+        `Señal actual ${shown}; necesitas ≤ ± ${fmt(threshold, 0)} m. Busca un lugar abierto o pulsa Marcar vértice para forzarlo.`
       );
       redrawMap();
       return;
@@ -2180,7 +2457,7 @@
       setGpsStatus(
         "live",
         `Recorriendo · ${state.points.length} puntos`,
-        `Avanzaste ${fmt(distance, 1)} m. El próximo vértice se marca a los ${fmt(minDistance, 0)} m.`
+        `Avanzaste ${fmt(distance, 1)} m. Si ya estás en la esquina, pulsa Marcar vértice.`
       );
       redrawMap();
       return;
@@ -2211,6 +2488,78 @@
     render();
   }
 
+  async function markVertex() {
+    if (gps.manualBusy) return;
+    if (!navigator.geolocation) {
+      setGpsStatus("error", "GPS no disponible", "Este navegador no tiene acceso a la ubicación.");
+      showToast("Este navegador no soporta geolocalización.");
+      return;
+    }
+
+    ensureAudio();
+    const session = gps.session;
+    gps.manualBusy = true;
+    el.gpsMark.disabled = true;
+    el.gpsMark.setAttribute("aria-busy", "true");
+    setText(el.gpsMarkText, "Leyendo GPS…");
+
+    try {
+      let replace = false;
+      if (state.points.length && state.method !== "gps") {
+        const ok = await askConfirm(
+          "Empezar croquis GPS",
+          "El croquis actual se reemplazará por un croquis GPS nuevo. Puedes deshacerlo después. ¿Continuar?",
+          "Empezar croquis GPS"
+        );
+        if (!ok || session !== gps.session) return;
+        replace = true;
+      }
+
+      let fix;
+      const activeFresh = gps.active && gps.lastFix
+        && Number.isFinite(gps.lastFix.at)
+        && Date.now() - gps.lastFix.at < 5000;
+      if (activeFresh) {
+        fix = gps.lastFix;
+      } else {
+        fix = await requestCurrentPosition();
+        if (session !== gps.session) return;
+      }
+
+      gps.lastFix = { ...fix, at: fix.at || Date.now() };
+      if (replace) {
+        gps.lastMark = null;
+        applyPoints([], "gps", { ref: null, fit: true });
+      }
+      updateFixDisplay();
+
+      const last = state.points[state.points.length - 1];
+      if (last) {
+        const distance = haversine(last, fix);
+        if (distance < 0.75) {
+          setGpsStatus(
+            "warn",
+            "Vértice ya registrado",
+            `Ya hay un vértice a ${fmt(distance, 1)} m. Muévete unos metros o usa el vértice existente.`
+          );
+          showToast(`Ya hay un vértice a ${fmt(distance, 1)} m.`);
+          return;
+        }
+      }
+
+      addGpsPoint(fix.lat, fix.lon, fix.accuracy, { manual: true });
+    } catch (error) {
+      const [title, text] = describeGpsError(error);
+      setGpsStatus(error && error.code === 1 ? "error" : "warn", title, text);
+      showToast(title);
+    } finally {
+      gps.manualBusy = false;
+      el.gpsMark.disabled = false;
+      el.gpsMark.removeAttribute("aria-busy");
+      setText(el.gpsMarkText, "Marcar vértice");
+    }
+  }
+
   async function startGps() {
     if (!navigator.geolocation) {
       setGpsStatus("error", "GPS no disponible", "Este navegador no tiene acceso a la ubicación.");
@@ -2226,10 +2575,12 @@
       if (!ok) return;
     }
 
+    ensureAudio();
+    gps.session += 1;
     stopGpsWatch();
     gps.active = false;
     gps.paused = false;
-    gps.lastFix = null;
+    clearGpsReadout();
     gps.elapsed = 0;
     gps.segmentStart = Date.now();
     gps.rejected = 0;
@@ -2268,6 +2619,7 @@
 
   function finishGps() {
     if (!(gps.active || gps.paused)) return;
+    gps.session += 1;
     if (gps.active) gps.elapsed += Date.now() - gps.segmentStart;
     gps.active = false;
     gps.paused = false;
@@ -2304,6 +2656,7 @@
   }
 
   async function handleGpsToggle() {
+    ensureAudio();
     if (gps.active) pauseGps();
     else if (gps.paused) resumeGps();
     else await startGps();
@@ -3479,12 +3832,24 @@
 
   function initGpsPanel() {
     el.gpsToggle.addEventListener("click", handleGpsToggle);
+    el.gpsMark.addEventListener("click", markVertex);
     el.gpsFinish.addEventListener("click", finishGps);
     el.gpsSimplify.addEventListener("click", simplifyGps);
+    el.gpsCopy.addEventListener("click", () => {
+      if (gps.lastFix) copyCoordinates(gps.lastFix.lat, gps.lastFix.lon);
+    });
+    el.gpsLastCopy.addEventListener("click", () => {
+      const index = validMarkIndex();
+      const point = index >= 0 ? state.points[index] : null;
+      if (point) copyCoordinates(point.lat, point.lon);
+    });
+    el.gpsSound.addEventListener("change", () => setSoundOn(el.gpsSound.checked));
+    el.gpsThreshold.addEventListener("change", updateFixDisplay);
     el.gpsMinDistance.addEventListener("blur", () => {
       const value = parseDecimal(el.gpsMinDistance.value);
       el.gpsMinDistance.value = String(clamp(Number.isFinite(value) ? value : 3, 1, 100));
     });
+    loadSoundPreference();
   }
 
   function initShapesPanel() {
@@ -3581,10 +3946,11 @@
   }
 
   function stopActiveGps() {
+    gps.session += 1;
     stopGpsWatch();
     gps.active = false;
     gps.paused = false;
-    gps.lastFix = null;
+    clearGpsReadout();
     gps.elapsed = 0;
     gps.segmentStart = 0;
     gps.rejected = 0;
@@ -3611,6 +3977,8 @@
     photoError("");
     sidesSignature = "";
     repsSignature = "";
+    gps.session += 1;
+    clearGpsReadout();
     renderLots();
     renderPhotos();
     render();
@@ -3867,6 +4235,7 @@
     initBackup();
     initPrint();
     initGpsPanel();
+    document.addEventListener("pointerdown", () => ensureAudio(), { once: true, passive: true });
     initShapesPanel();
     initCoordsPanel();
     initSidesPanel();
@@ -3881,6 +4250,7 @@
     updateShapePreview();
     updateAccuracyPill();
     if (!navigator.geolocation) {
+      el.gpsMark.disabled = true;
       setGpsStatus("error", "GPS no disponible", "Este navegador no ofrece geolocalización. Usa linderos o coordenadas.");
     } else if (loaded !== "none" && state.points.length) {
       setGpsStatus("", "Caso recuperado", "Tu última medición se cargó desde este dispositivo. Inicia un recorrido para reemplazarla.");
