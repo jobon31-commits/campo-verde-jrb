@@ -11,6 +11,7 @@
   const DEG = Math.PI / 180;
   const CIRCLE_SEGMENTS = 64;
   const APP_NAME = "CAMPO VERDE JRB";
+  const APP_VERSION = "1.2.0";
   const BRAND_LINE = "AVALÚOS INTEGRALES · Urbanos & Rurales";
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
@@ -548,6 +549,8 @@
     gpsSound: $("#gpsSound"),
     gpsSoundText: $("#gpsSoundText"),
     gpsSoundIcon: $("#gpsSoundIcon"),
+    appVersion: $("#appVersion"),
+    updateBtn: $("#updateBtn"),
     shapeTabs: $$("#shapeTabs button"),
     shapeErrors: $("#shapeError"),
     shapeArea: $("#shapeArea"),
@@ -4138,6 +4141,96 @@
     });
   }
 
+  function setUpdateState(text, disabled) {
+    if (!el.updateBtn) return;
+    setText(el.updateBtn, text);
+    el.updateBtn.disabled = Boolean(disabled);
+  }
+
+  function reloadWithNewWorker() {
+    let reloaded = false;
+    const reload = () => {
+      if (reloaded) return;
+      reloaded = true;
+      location.reload();
+    };
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener("controllerchange", reload, { once: true });
+    }
+    window.setTimeout(reload, 1500);
+  }
+
+  function waitForWorker(worker) {
+    return new Promise((resolve) => {
+      if (!worker) {
+        resolve(null);
+        return;
+      }
+      if (worker.state === "activated" || worker.state === "installed" || worker.state === "redundant") {
+        resolve(worker);
+        return;
+      }
+      let timer = 0;
+      const finish = () => {
+        window.clearTimeout(timer);
+        worker.removeEventListener("statechange", onChange);
+        resolve(worker);
+      };
+      const onChange = () => {
+        if (worker.state !== "installing" && worker.state !== "parsed") finish();
+      };
+      worker.addEventListener("statechange", onChange);
+      timer = window.setTimeout(finish, 10000);
+    });
+  }
+
+  async function checkForUpdate() {
+    const idleLabel = "Buscar actualización";
+    if (!navigator.onLine) {
+      showToast("Sin conexión. Conéctate a internet para buscar la actualización.", 4200);
+      return;
+    }
+    if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) {
+      showToast("Recarga la página para comprobar si hay una versión nueva.", 4200);
+      return;
+    }
+
+    setUpdateState("Buscando…", true);
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) {
+        setUpdateState(idleLabel, false);
+        location.reload();
+        return;
+      }
+      await registration.update();
+      const worker = registration.installing || registration.waiting;
+      if (!worker) {
+        setUpdateState(idleLabel, false);
+        showToast(`Ya tienes la última versión (${APP_VERSION}).`, 3400);
+        return;
+      }
+      await waitForWorker(worker);
+      if (worker.state === "redundant") {
+        setUpdateState(idleLabel, false);
+        showToast("No se pudo actualizar. Revisa la conexión e inténtalo otra vez.", 4400);
+        return;
+      }
+      if (worker.state === "installed") worker.postMessage({ type: "SKIP_WAITING" });
+      setUpdateState("Actualizando…", true);
+      showToast("Versión nueva encontrada. Recargando la app…", 3200);
+      reloadWithNewWorker();
+    } catch (error) {
+      setUpdateState(idleLabel, false);
+      showToast("No se pudo comprobar la actualización. Inténtalo de nuevo.", 4200);
+    }
+  }
+
+  function initUpdateControl() {
+    if (el.appVersion) setText(el.appVersion, `Versión ${APP_VERSION}`);
+    if (el.updateBtn) el.updateBtn.addEventListener("click", checkForUpdate);
+  }
+
   async function newMeasurement() {
     const hasContent = state.points.length || state.lots.length || state.photos.length
       || state.repetitions.length || state.refAreaHa || state.notes || state.projectName !== "Predio sin nombre";
@@ -4242,6 +4335,7 @@
     initCases();
     initInstall();
     initServiceWorker();
+    initUpdateControl();
     initKeyboard();
     initVisibility();
     initMapInteractions();

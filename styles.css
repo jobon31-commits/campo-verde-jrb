@@ -1385,6 +1385,28 @@ svg { display: block; }
 .site-foot strong { color: var(--ink-2); font-weight: 700; }
 .offline { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .offline-dot { width: 5px; height: 5px; background: #6da27b; border-radius: 50%; }
+.app-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+}
+.app-meta-sep { opacity: 0.55; }
+.link-btn {
+  padding: 0;
+  font: inherit;
+  color: var(--green);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted rgba(29, 106, 75, 0.45);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.link-btn:hover { color: var(--green-dark); border-bottom-color: var(--green-dark); }
+.link-btn:disabled { color: var(--muted); border-bottom-color: transparent; cursor: default; }
 
 /* ---------- Diálogo y avisos ---------- */
 dialog {

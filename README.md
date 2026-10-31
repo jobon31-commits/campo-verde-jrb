@@ -12,6 +12,15 @@ Repositorio: **https://github.com/jobon31-commits/campo-verde-jrb**
 
 Abre el enlace en el móvil e instálala como PWA (ver más abajo).
 
+## Actualizaciones
+
+La app instalada se actualiza sola al abrirla con internet: descarga la versión nueva, elimina la caché anterior y conserva los casos guardados. **No hace falta desinstalar.**
+
+- En el pie se muestra la **versión en uso** y el botón **Buscar actualización**, que consulta el service worker, aplica la versión nueva y recarga la app.
+- Los archivos se referencian con su versión (`app.js?v=1.2.0`, `styles.css?v=1.2.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
+- La primera apertura tras una publicación puede mostrar la versión anterior; al abrir de nuevo (o pulsar **Buscar actualización**) queda la última.
+- Desinstalar puede borrar los casos guardados en el dispositivo. Exporta un **respaldo JSON** antes de hacerlo.
+
 ## Qué hace
 
 - **Tres métodos de medición**

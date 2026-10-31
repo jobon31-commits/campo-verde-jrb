@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Campo Verde JRB">
   <meta name="color-scheme" content="light">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=1.2.0">
 </head>
 <body>
   <!-- Sprite de iconos -->
@@ -535,6 +535,11 @@
       <div class="foot-right">
         <p>Medición orientativa. Para escrituración o trámites legales, consulta a un agrimensor con GNSS/RTK.</p>
         <p class="offline"><span class="offline-dot"></span> Funciona sin conexión · Datos en este dispositivo</p>
+        <p class="app-meta">
+          <span id="appVersion">Versión —</span>
+          <span class="app-meta-sep" aria-hidden="true">·</span>
+          <button class="link-btn" id="updateBtn" type="button">Buscar actualización</button>
+        </p>
       </div>
     </footer>
   </div>
@@ -557,6 +562,6 @@
   <input id="restoreInput" type="file" accept=".json,application/json" hidden>
   <section id="printReport" class="print-report" aria-hidden="true"></section>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=1.2.0"></script>
 </body>
 </html>

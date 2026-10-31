@@ -1,12 +1,12 @@
-/* CAMPO VERDE JRB · servicio sin conexión */
+﻿/* CAMPO VERDE JRB Â· servicio sin conexiÃ³n */
 "use strict";
 
-const CACHE_NAME = "campoverdejr-v5";
+const CACHE_NAME = "campoverdejr-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=1.2.0",
+  "./app.js?v=1.2.0",
   "./manifest.json",
   "./icons/favicon.svg",
   "./icons/icon-192.png",
@@ -33,8 +33,12 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Los archivos propios se sirven desde la caché y se actualizan en segundo
-// plano. Así la app abre al instante y funciona sin cobertura.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+// Los archivos propios se sirven desde la cachÃ© y se actualizan en segundo
+// plano. AsÃ­ la app abre al instante y funciona sin cobertura.
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
