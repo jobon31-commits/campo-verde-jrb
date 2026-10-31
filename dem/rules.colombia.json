@@ -1,0 +1,59 @@
+{
+  "id": "co-igac-upra-2026.1",
+  "country": "CO",
+  "version": "2026.1",
+  "createdAt": "2026-10-31",
+  "author": "CAMPO VERDE JRB",
+  "source": "IGAC / UPRA",
+  "scale": "1:100000",
+  "reviewRequired": true,
+  "notes": "Ruleset de apoyo. No sustituye la carta de suelos oficial ni la firma de un profesional. La clase oficial es la base; la pendiente solo puede empeorarla.",
+  "classOrder": ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"],
+  "slopeBands": [
+    { "id": "0-3", "min": 0, "max": 3, "maxClass": "I", "label": "0 a 3 %" },
+    { "id": "3-7", "min": 3, "max": 7, "maxClass": "II", "label": "3 a 7 %" },
+    { "id": "7-12", "min": 7, "max": 12, "maxClass": "III", "label": "7 a 12 %" },
+    { "id": "12-25", "min": 12, "max": 25, "maxClass": "IV", "label": "12 a 25 %" },
+    { "id": "25-50", "min": 25, "max": 50, "maxClass": "V", "label": "25 a 50 %" },
+    { "id": "50-75", "min": 50, "max": 75, "maxClass": "VI", "label": "50 a 75 %" },
+    { "id": ">75", "min": 75, "max": null, "maxClass": "VII", "label": "mayor de 75 %" }
+  ],
+  "evaluation": {
+    "officialClassIsBase": true,
+    "combine": "mostRestrictive",
+    "slopeCanImproveClass": false,
+    "classVIIINote": "La clase VIII no se deriva solo de la pendiente: requiere limitantes especiales (inundacion, pedregosidad, salinidad u otras) con evidencia.",
+    "confirmedRequires": {
+      "professional": true,
+      "signature": true,
+      "licenseNumber": true,
+      "date": true
+    }
+  },
+  "overrides": {
+    "classV": {
+      "requiresEvidence": true,
+      "note": "La clase V y las limitantes especiales no salen del DEM. Requieren carta de suelos o evidencia de campo."
+    },
+    "classVIII": {
+      "requiresEvidence": true,
+      "note": "No asignar por pendiente."
+    }
+  },
+  "statuses": {
+    "topographic": "limitante topografica",
+    "proposed": "propuesta",
+    "confirmed": "confirmada",
+    "notDeterminable": "no determinable",
+    "notSuitable": "no apto",
+    "insufficient": "resolucion insuficiente",
+    "notValidated": "no validado"
+  },
+  "warnings": [
+    "La clase oficial IGAC/UPRA vive a escala 1:100.000 (unidades de decenas de hectareas). Un DEM de 5 m no mejora esa escala.",
+    "El DEM de 5 m mejora la pendiente de detalle, no la clase oficial.",
+    "Sin carta de suelos no se inventa clase: se informa 'no determinable'.",
+    "En terreno plano, un DEM de 30 m no resuelve el umbral de 3 %.",
+    "Un DSM no es apto para clase agrologica ni para afirmar 'a nivel del suelo'."
+  ]
+}
