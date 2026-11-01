@@ -2,8 +2,8 @@
 
 - **Rama:** `feat/pendiente-dtm` (no publicada)
 - **Base:** `main` en `6c3d80e`, service worker `campoverdejr-v6`
-- **Fecha:** 2026-10-31
-- **Estado:** Fase 0 en curso; Fase 1 con base técnica, sin UI ni backend
+- **Fecha:** 2026-11-01
+- **Estado:** BYOD (A) integrado y probado en la rama; free/pro siguen bloqueados por licencias
 
 ## Qué existe en esta rama
 
@@ -12,15 +12,22 @@ dem/
   sources.json          Registro de fuentes (Colombia + global) y lista prohibida
   rules.colombia.json   Ruleset I–VIII, bandas de pendiente y advertencias
   dem-core.js           Núcleo puro: proyección, Horn, blur, zonal, clase, hash
+  dem-file.js           Lector BYOD: ESRI ASCII y GeoTIFF (EPSG:4326)
+  dem-compute.js        Recorte, rasterización, ventana adaptativa, clase y hash
+  dem-worker.js         Web Worker: lee, calcula y devuelve solo el resultado
 tests/
   dem-core.test.js      27 pruebas numéricas y de contrato
   registry.test.js      11 pruebas de integridad del registro y ruleset
+  dem-file.test.js      18 pruebas de ASC/GeoTIFF y rechazos
+  dem-compute.test.js   22 pruebas de recorte, pendiente, clase y hash
 docs/pendiente-dtm/
   ADR-0001-licencias.md Bloqueo legal y opciones
   PLAN.md               Este documento
 ```
 
-No se modificó `app.js`, `index.html`, `styles.css`, `sw.js` ni `main`. La app publicada no cambia.
+La app ya incluye el panel **Pendiente del terreno** (BYOD), el informe y las
+exportaciones. El DEM crudo nunca se persiste: solo la declaración y el
+resultado compacto en `state.dem`. La rama no se ha publicado en `main`.
 
 ## Ejecutar pruebas
 
@@ -28,9 +35,11 @@ No se modificó `app.js`, `index.html`, `styles.css`, `sw.js` ni `main`. La app 
 cd C:\DEV\terralinde
 node tests\dem-core.test.js
 node tests\registry.test.js
+node tests\dem-file.test.js
+node tests\dem-compute.test.js
 ```
 
-Resultado actual: **27/27** y **11/11**.
+Resultado actual: **27/27**, **11/11**, **18/18** y **22/22**.
 
 ## Fases
 
@@ -57,11 +66,13 @@ Hecho:
 - Validación DTM (producto, bareEarth, resolución, huellas, sesgo).
 - Resumen canónico sin fotos ni `updatedAt` para hash reproducible.
 - Ruleset Colombia con umbrales 0–3–7–12–25–50–75 % y clases I–VIII.
+- Lector BYOD `.asc`/GeoTIFF, Web Worker, panel, informe, GeoJSON/KML y caché PWA.
 
 Pendiente:
-- Backend `/slope` y COG (o BYOD/GeoTIFF + WASM).
+- Backend `/slope` y COG para datos abiertos.
 - Cobertura real IGAC/FABDEM, teselas y validación GEDI/ICESat-2.
-- Panel, badge, IndexedDB, informe y caso de ejemplo.
+- Estadística zonal por sector con huecos y multipolígono.
+- Reconciliación de contrato: `classesPct`/`classesHa`, estados español/API y doble hash.
 
 ### Fase 2 · Sectores y clase asistida
 
@@ -81,24 +92,43 @@ Pendiente:
 - Migración de esquema y los cinco puntos de persistencia.
 - Hash en Web Worker, CSP, accesibilidad y documentación final.
 
-## Modelo de datos propuesto (todavía no aplicado)
+## Modelo de datos aplicado (BYOD)
+
+```js
+case.dem = {
+  declaration: {
+    sourceId: "byod", name, product: "DTM" | "DSM", bareEarth,
+    fileName, format, license, attribution,
+    acquisitionYear, verticalAccuracyM, officialClass,
+    validation: { source, n, biasM, rmseM, date, status, declared }
+  },
+  result: {
+    ok, hash, computedAt, meta, dem, validation,
+    slope: { meanPct, p50Pct, p95Pct, maxPct, classesPct, uncertaintyPct },
+    sectors: [{ id, name, cells, areaHa, slope, class }],
+    warnings, summary, rulesId
+  }
+};
+```
+
+- El archivo crudo **nunca** se persiste; solo declaración y resultado compacto.
+- `state.dem` entra en `projectPayload`, por lo que cambia la huella del proyecto.
+- El resultado se valida al restaurar y se marca **sin recalcular** si cambió el
+  croquis, la clase oficial o la declaración.
+- Un caso puede existir sin DEM; el panel queda vacío y no bloquea la medición.
+
+## Modelo de datos previsto (sectores y backend)
 
 ```js
 case.tier = "free30" | "local_lidar" | "pro5";
 
-case.dem = {
-  sourceId, product: "DTM" | "DSM", bareEarth,
-  resolutionM, verticalAccuracyM, acquisitionYear, publicationYear,
-  method, license, commercialUse, attribution,
-  validation: { source, n, rmseM, biasM, p95M, date, status },
-  windowM, algorithm: "Horn 3x3", hash
-};
-
 case.sectors = [{
-  id, name, crop, color, ring: [[lat, lon]], areaHa,
-  slope: { meanPct, p50Pct, p95Pct, maxPct, classesPct, uncertaintyPct, groundConfidencePct },
+  id, name, crop, color, ring: [[lat, lon]], holes: [[[lat, lon]]], areaHa,
+  slope: { meanPct, p50Pct, p95Pct, maxPct, classesPct, classesHa, classShare,
+           uncertaintyPct, groundConfidencePct },
   class: { slopeClass, officialClass, proposedClass, finalClass, limitingFactor,
-           status, ruleSetId, confirmedBy, confirmedAt }
+           status: "propuesta" | "no validado" | "no determinable" | "no apto" |
+                   "resolution_insufficient", ruleSetId, confirmedBy, confirmedAt }
 }];
 
 case.delta30vs5 = { changedClassPct, changedAreaHa, notes };

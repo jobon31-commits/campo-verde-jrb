@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Campo Verde JRB">
   <meta name="color-scheme" content="light">
-  <link rel="stylesheet" href="styles.css?v=1.2.0">
+  <link rel="stylesheet" href="styles.css?v=1.3.0">
 </head>
 <body>
   <!-- Sprite de iconos -->
@@ -525,6 +525,163 @@
           <p class="form-error" id="photoError" hidden></p>
         </section>
       </aside>
+
+      <section class="panel dem-panel" id="demPanel" aria-labelledby="demTitle">
+        <div class="panel-head dem-head">
+          <div>
+            <h2 id="demTitle">Pendiente del terreno</h2>
+            <p class="dem-sub" id="demSubtitle">Modelo propio (BYOD) · cálculo en tu dispositivo</p>
+          </div>
+          <span class="dem-status is-empty" id="demStatus"><i></i><span id="demStatusText">Sin DEM</span></span>
+        </div>
+
+        <div class="dem-body">
+          <div class="dem-intro">
+            <span class="step-num">03</span>
+            <p>Carga un <b>DTM</b> (suelo desnudo) en GeoTIFF o ESRI ASCII, en <b>EPSG:4326</b>. El archivo se lee y calcula en tu teléfono: no se sube a ningún servidor y no se guarda. La clase agrológica necesita además la carta de suelos IGAC/UPRA.</p>
+          </div>
+
+          <div class="dem-layout">
+            <div class="dem-form-col">
+              <label class="dem-drop" id="demDrop" for="demFile">
+                <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                <strong id="demDropTitle">Elegir archivo DEM</strong>
+                <span id="demDropText">.asc, .tif o .tiff · máx. 80 MB</span>
+                <input id="demFile" type="file" accept=".asc,.txt,.tif,.tiff" hidden>
+              </label>
+              <p class="micro" id="demFileInfo">El DEM debe cubrir todo el predio. Límite: 16 millones de celdas.</p>
+
+              <div class="field-grid-2 dem-fields">
+                <label class="field">Producto
+                  <select id="demProduct">
+                    <option value="DTM">DTM · suelo desnudo</option>
+                    <option value="DSM">DSM · superficie</option>
+                  </select>
+                </label>
+                <label class="field">Error vertical LE90
+                  <span class="unit-field"><input id="demAccuracy" type="text" inputmode="decimal" placeholder="—" autocomplete="off"><span>m</span></span>
+                </label>
+                <label class="field">Fuente del DEM
+                  <input id="demSource" type="text" maxlength="80" placeholder="IGAC LiDAR, vuelo propio…" autocomplete="off">
+                </label>
+                <label class="field">Año de captura
+                  <input id="demYear" type="text" inputmode="numeric" maxlength="4" placeholder="2024" autocomplete="off">
+                </label>
+                <label class="field span-2">Licencia o autorización
+                  <input id="demLicense" type="text" maxlength="120" placeholder="Datos abiertos IGAC, licencia del propietario…" autocomplete="off">
+                </label>
+                <label class="field span-2">Clase oficial de suelos
+                  <select id="demOfficialClass">
+                    <option value="">Sin carta de suelos · no determinable</option>
+                    <option value="I">I</option>
+                    <option value="II">II</option>
+                    <option value="III">III</option>
+                    <option value="IV">IV</option>
+                    <option value="V">V</option>
+                    <option value="VI">VI</option>
+                    <option value="VII">VII</option>
+                    <option value="VIII">VIII</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="dem-check" for="demBareEarth">
+                <input id="demBareEarth" type="checkbox" checked>
+                <span>Declaro que es un <b>DTM de suelo desnudo</b> (sin vegetación ni edificaciones).</span>
+              </label>
+
+              <details class="dem-advanced">
+                <summary>Validación declarada con huellas (opcional)</summary>
+                <div class="field-grid-2">
+                  <label class="field">Fuente
+                    <select id="demValidationSource">
+                      <option value="">Sin validación</option>
+                      <option value="GEDI L2A">GEDI L2A</option>
+                      <option value="ICESat-2 ATL08">ICESat-2 ATL08</option>
+                      <option value="GNSS / RTK">GNSS / RTK</option>
+                      <option value="Otro">Otro</option>
+                    </select>
+                  </label>
+                  <label class="field">Huellas (n)
+                    <input id="demValidationN" type="text" inputmode="numeric" placeholder="0" autocomplete="off">
+                  </label>
+                  <label class="field">Sesgo
+                    <span class="unit-field"><input id="demValidationBias" type="text" inputmode="decimal" placeholder="—" autocomplete="off"><span>m</span></span>
+                  </label>
+                  <label class="field">RMSE
+                    <span class="unit-field"><input id="demValidationRmse" type="text" inputmode="decimal" placeholder="—" autocomplete="off"><span>m</span></span>
+                  </label>
+                </div>
+                <p class="micro">Solo si comparaste el DEM con esas huellas. La app no verifica estos valores: quedan como declaración del usuario y así se muestran.</p>
+              </details>
+
+              <div class="dem-actions">
+                <button class="btn btn-primary" id="demAnalyze" type="button" disabled>
+                  <svg class="icon" aria-hidden="true"><use href="#i-polygon"></use></svg>
+                  <span id="demAnalyzeText">Calcular pendiente</span>
+                </button>
+                <button class="btn btn-ghost" id="demClear" type="button" disabled>Quitar DEM</button>
+              </div>
+
+              <p class="form-error" id="demError" hidden></p>
+
+              <div class="dem-progress" id="demProgress" hidden>
+                <span class="dem-progress-track"><i id="demProgressBar"></i></span>
+                <span id="demProgressText">Preparando…</span>
+              </div>
+
+              <p class="micro dem-legal">La pendiente no reemplaza la carta de suelos ni la firma de un profesional. Un DSM no sirve para clase agrológica. La app no certifica la clase: la propone y la deja sujeta a revisión.</p>
+            </div>
+
+            <div class="dem-result-col" id="demResults">
+              <div class="dem-empty" id="demEmpty">
+                <svg class="empty-icon" viewBox="0 0 48 48" aria-hidden="true">
+                  <path d="M4 34 15 20l8 9 7-11 14 18H4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                  <path d="M4 39h40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 4"/>
+                </svg>
+                <h3>Pendiente y clase asistida</h3>
+                <p>Dibuja el predio y carga un DEM. Verás pendiente media, P95, distribución por rangos y una propuesta de clase.</p>
+                <p class="micro">Si no hay carta de suelos, la clase quedará como <b>no determinable</b>.</p>
+              </div>
+
+              <div id="demResultBody" hidden>
+                <div class="dem-result-head">
+                  <span class="dem-badge" id="demResultBadge">DEM propio · DTM</span>
+                  <span class="dem-badge is-muted" id="demResultResolution">— m</span>
+                  <span class="dem-validation-badge" id="demValidationBadge">No validado</span>
+                </div>
+                <p class="dem-result-source" id="demResultSource">—</p>
+                <p class="dem-stale" id="demStaleNote" hidden></p>
+
+                <div class="dem-kpis">
+                  <div><span>Pendiente media</span><strong id="demMean">—</strong><em>%</em></div>
+                  <div><span>P95</span><strong id="demP95">—</strong><em>%</em></div>
+                  <div><span>Máxima</span><strong id="demMax">—</strong><em>%</em></div>
+                </div>
+
+                <div class="dem-bars" id="demBars" aria-label="Distribución de pendiente por rango"></div>
+
+                <div class="dem-class" id="demClass">
+                  <div class="dem-class-row"><span>Clase oficial</span><strong id="demOfficial">—</strong></div>
+                  <div class="dem-class-row"><span>Clase por pendiente</span><strong id="demSlopeClass">—</strong></div>
+                  <div class="dem-class-row is-final"><span>Clase propuesta</span><strong id="demFinalClass">—</strong></div>
+                  <p class="dem-class-note" id="demClassNote">—</p>
+                </div>
+
+                <div class="dem-meta" id="demMeta"></div>
+                <ul class="dem-warnings" id="demWarnings"></ul>
+
+                <div class="dem-result-foot">
+                  <code id="demHash">—</code>
+                  <button class="mini-btn" id="demCopy" type="button">
+                    <svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg> Copiar resumen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="site-foot">
@@ -562,6 +719,6 @@
   <input id="restoreInput" type="file" accept=".json,application/json" hidden>
   <section id="printReport" class="print-report" aria-hidden="true"></section>
 
-  <script src="app.js?v=1.2.0"></script>
+  <script src="app.js?v=1.3.0"></script>
 </body>
 </html>

@@ -31,6 +31,9 @@ El problema no es técnico: es de licencias. El prompt maestro v4 lo declara blo
 - **No habilitar el nivel pagado** ni publicar el panel DEM en `main` hasta tener por escrito:
   - licencia comercial para la fuente del free, y
   - licencia de distribución (o BYOD aprobado) para WorldDEM.
+- **BYOD (A):** aprobado como modo local sin backend ni cobro. El usuario aporta
+  su DEM y la app solo deriva pendiente y clase asistida; el archivo crudo no se
+  guarda ni se redistribuye. Esto no habilita el nivel free ni el Pro.
 - **Free:** no usar FABDEM en producción comercial mientras no exista FABDEM+ o una fuente abierta equivalente. El registro de fuentes ya marca el bloqueo (`license.blocker`).
 - **Pro:** implementar primero el flujo de cotización y el modo BYOD; la compra/entrega automática queda para cuando exista contrato.
 - **Local IGAC:** ruta gratuita prioritaria cuando la cobertura exista.
