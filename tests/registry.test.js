@@ -100,9 +100,10 @@ test("Ruleset: clases I a VIII y la pendiente no mejora", () => {
   assert.strictEqual(rules.evaluation.combine, "mostRestrictive");
 });
 
-test("Integracion: oficial II + 18 % -> IV con semaforo rojo", () => {
+test("Integracion: oficial II + 18 % -> propuesta IV con semaforo rojo", () => {
   const result = core.evaluateClass({ officialClass: "II", slopePct: 18, rules });
-  assert.strictEqual(result.finalClass, "IV");
+  assert.strictEqual(result.proposedClass, "IV");
+  assert.strictEqual(result.finalClass, null);
   assert.strictEqual(result.semaforo, "rojo");
   assert.strictEqual(result.status, "propuesta");
 });

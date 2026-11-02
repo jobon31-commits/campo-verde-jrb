@@ -17,7 +17,7 @@ Abre el enlace en el móvil e instálala como PWA (ver más abajo).
 La app instalada se actualiza sola al abrirla con internet: descarga la versión nueva, elimina la caché anterior y conserva los casos guardados. **No hace falta desinstalar.**
 
 - En el pie se muestra la **versión en uso** y el botón **Buscar actualización**, que consulta el service worker, aplica la versión nueva y recarga la app.
-- Los archivos se referencian con su versión (`app.js?v=1.2.0`, `styles.css?v=1.2.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
+- Los archivos se referencian con su versión (`app.js?v=1.4.0`, `styles.css?v=1.4.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
 - La primera apertura tras una publicación puede mostrar la versión anterior; al abrir de nuevo (o pulsar **Buscar actualización**) queda la última.
 - Desinstalar puede borrar los casos guardados en el dispositivo. Exporta un **respaldo JSON** antes de hacerlo.
 
@@ -40,7 +40,9 @@ La app instalada se actualiza sola al abrirla con internet: descarga la versión
 
 - **Observaciones** del levantamiento y **huella SHA-256** del proyecto para verificar la integridad del archivo digital.
 
-- **Informe técnico imprimible** (PDF): marca, croquis con grilla geográfica, coordenadas en grados decimales y DMS, comparación con la referencia, vértices y linderos, lotes, repeticiones, fotos, observaciones, firmas y huella.
+- **Pendiente del terreno (BYOD):** carga tu propio DTM `.asc` o GeoTIFF en EPSG:4326. El archivo se procesa en tu dispositivo y no se guarda. La app calcula pendiente media/P95/máxima, distribución por rangos, incertidumbre orientativa y una clase agrológica asistida. La clase oficial IGAC/UPRA es la base; la pendiente solo puede empeorarla y la app nunca confirma una clase sin revisión humana.
+
+- **Informe técnico imprimible** (PDF): marca, croquis con grilla geográfica, coordenadas en grados decimales y DMS, comparación con la referencia, vértices y linderos, lotes, repeticiones, fotos, pendiente del terreno, observaciones, firmas y huella.
 
 - **Exportaciones:** CSV de vértices, KML para Google Earth, GeoJSON y resumen para el portapapeles. **Respaldo JSON** con huella SHA-256 y restauración con verificación. Al restaurar, el respaldo se abre como un caso nuevo y el caso anterior se conserva.
 
@@ -105,9 +107,10 @@ Luego abre `http://localhost:8899/`.
 index.html        Estructura, paneles, PWA e informe imprimible
 styles.css        Diseño, croquis, tablas, adaptación móvil e impresión
 app.js            Estado, casos, cálculos geodésicos, croquis, fotos, informe y persistencia
+dem/              Lector DEM, núcleo, cálculo, worker y adaptador de contrato
 manifest.json     Manifest de instalación (nombre, iconos, colores)
 sw.js             Service worker: caché y funcionamiento sin conexión
 icons/            Iconos 192/512, maskable, Apple Touch y favicon
+docs/             Informe de mercado, hoja de ruta, ADR de licencias y contrato DEM
 README.md         Este documento
-docs/             Informe de mercado y hoja de ruta de mejoras
 ```

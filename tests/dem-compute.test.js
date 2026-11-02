@@ -4,6 +4,7 @@
 const assert = require("assert");
 const core = require("../dem/dem-core.js");
 const compute = require("../dem/dem-compute.js");
+const contract = require("../dem/dem-contract.js");
 
 let passed = 0;
 const failures = [];
@@ -112,13 +113,13 @@ test("Rasterizacion: rectangulo de 20 x 20 celdas da 400 celdas", () => {
 
 test("Recorte: conserva georreferencia y margen", () => {
   const grid = makeGrid({ width: 44, height: 44 });
-  const win = compute.clipGrid(grid, compute.bboxOf([rect(grid, 10, 10, 20, 20)]), 3);
+  const win = compute.clipGrid(grid, compute.bboxOfPolygons([[rect(grid, 10, 10, 20, 20)]]), 3);
   assert.ok(win.width >= 26 && win.height >= 26);
   approx(win.west, grid.west + 7 * grid.cellX, 1e-12, "west");
   approx(win.north, grid.north - 7 * grid.cellY, 1e-12, "north");
 });
 
-test("Blur enmascarado: conserva un plano al 10 % y no propaga NaN", () => {
+test("Ventana completa: no rellena bordes ni propaga NODATA", () => {
   const width = 30;
   const height = 30;
   const z = new Float32Array(width * height);
@@ -127,7 +128,10 @@ test("Blur enmascarado: conserva un plano al 10 % y no propaga NaN", () => {
   }
   z[5 * width + 5] = NaN;
   const blurred = compute.maskedBlur(z, width, height, 2);
-  assert.ok(Number.isFinite(blurred[5 * width + 6]), "el vecino del NaN debe tener dato");
+  assert.ok(Number.isNaN(blurred[5 * width + 6]), "el vecino dentro de la ventana queda sin dato");
+  assert.ok(Number.isNaN(blurred[5 * width + 5]), "la celda NODATA sigue sin dato");
+  assert.ok(Number.isFinite(blurred[5 * width + 9]), "fuera de la ventana hay dato");
+  assert.ok(Number.isNaN(blurred[0]), "el borde de la ventana completa no se rellena");
   const slope = core.hornSlope(blurred, width, height, CELL_XM, CELL_YM);
   const mask = new Uint8Array(width * height);
   for (let y = 4; y < height - 4; y += 1) {
@@ -149,7 +153,7 @@ test("Ventana: 30 m con LE90 2,5 m no resuelve el 3 %", () => {
   const choice = compute.pickWindow({ resolutionM: 30, verticalAccuracyM: 2.5, targetPct: 3 });
   assert.strictEqual(choice.possible, false);
   assert.strictEqual(choice.marginal, false);
-  assert.strictEqual(choice.windowM, 50);
+  assert.strictEqual(choice.windowM, 25);
 });
 
 test("Ventana: respeta una ventana pedida por el usuario", () => {
@@ -164,11 +168,13 @@ test("Clase: sin carta de suelos queda no determinable", () => {
     product: "DTM",
     cells: 400,
     officialClass: null,
-    validation: { status: "validado" },
+    validation: { status: "validated" },
     slopePct: 5,
     minCells: 100,
   });
-  assert.strictEqual(result.status, "no determinable");
+  assert.strictEqual(result.status, "not_determinable");
+  assert.strictEqual(result.statusEs, "no determinable");
+  assert.strictEqual(result.proposedClass, null);
   assert.strictEqual(result.finalClass, null);
   assert.strictEqual(result.semaforo, "sin datos");
 });
@@ -178,11 +184,13 @@ test("Clase: DSM no es apto y no propone clase", () => {
     product: "DSM",
     cells: 400,
     officialClass: "II",
-    validation: { status: "validado" },
+    validation: { status: "validated" },
     slopePct: 5,
     minCells: 100,
   });
-  assert.strictEqual(result.status, "no apto");
+  assert.strictEqual(result.status, "not_determinable");
+  assert.strictEqual(result.statusEs, "no apto");
+  assert.strictEqual(result.proposedClass, null);
   assert.strictEqual(result.semaforo, "sin datos");
   assert.strictEqual(result.canConfirm, false);
 });
@@ -196,8 +204,10 @@ test("Clase: oficial II sin validacion -> no validado, aunque proponga IV", () =
     slopePct: 18,
     minCells: 100,
   });
-  assert.strictEqual(result.status, "no validado");
-  assert.strictEqual(result.finalClass, "IV");
+  assert.strictEqual(result.status, "topographic_limit");
+  assert.strictEqual(result.statusEs, "no validado");
+  assert.strictEqual(result.proposedClass, "IV");
+  assert.strictEqual(result.finalClass, null);
   assert.strictEqual(result.semaforo, "rojo");
 });
 
@@ -210,8 +220,10 @@ test("Clase: DTM validado II + 18 % -> propuesta IV, nunca confirmada", () => {
     slopePct: 18,
     minCells: 100,
   });
-  assert.strictEqual(result.status, "propuesta");
-  assert.strictEqual(result.finalClass, "IV");
+  assert.strictEqual(result.status, "proposed");
+  assert.strictEqual(result.statusEs, "propuesta");
+  assert.strictEqual(result.proposedClass, "IV");
+  assert.strictEqual(result.finalClass, null);
   assert.strictEqual(result.canConfirm, false);
 });
 
@@ -223,7 +235,7 @@ testAsync("Analisis: plano al 10 % con DTM validado", async () => {
     polygon,
     dem: validated(),
     officialClass: "II",
-    options: { windowM: 10, minCells: 100 },
+    options: { windowM: 25, minCells: 100 },
   });
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.meta.cells, 400);
@@ -234,15 +246,18 @@ testAsync("Analisis: plano al 10 % con DTM validado", async () => {
   approx(result.meta.areaHa, 400 * CELL_XM * CELL_YM / 10000, 1e-3, "area de celdas");
   approx(result.meta.areaPolygonHa, 400 * CELL_XM * CELL_YM / 10000, 0.02, "area del poligono");
   assert.strictEqual(result.sectors.length, 1);
-  assert.strictEqual(result.sectors[0].class.status, "propuesta");
+  assert.strictEqual(result.sectors[0].class.status, "proposed");
+  assert.strictEqual(result.sectors[0].class.statusEs, "propuesta");
   assert.strictEqual(result.sectors[0].class.officialClass, "II");
   assert.strictEqual(result.sectors[0].class.slopeClass, "III");
-  assert.strictEqual(result.sectors[0].class.finalClass, "III");
+  assert.strictEqual(result.sectors[0].class.proposedClass, "III");
+  assert.strictEqual(result.sectors[0].class.finalClass, null);
   assert.strictEqual(result.validation.ok, true);
   assert.strictEqual(result.hash.length, 64);
+  assert.strictEqual(result.resultHash, `sha256:${result.hash}`);
 });
 
-testAsync("Analisis: oficial II + 18 % -> IV rojo", async () => {
+testAsync("Analisis: oficial II + 18 % -> propuesta IV rojo", async () => {
   const grid = makeGrid({
     width: 44,
     height: 44,
@@ -253,14 +268,15 @@ testAsync("Analisis: oficial II + 18 % -> IV rojo", async () => {
     polygon: rect(grid, 10, 10, 20, 20),
     dem: validated(),
     officialClass: "II",
-    options: { windowM: 10 },
+    options: { windowM: 25 },
   });
   assert.strictEqual(result.sectors[0].class.officialClass, "II");
   assert.strictEqual(result.sectors[0].class.slopeClass, "IV");
-  assert.strictEqual(result.sectors[0].class.finalClass, "IV");
+  assert.strictEqual(result.sectors[0].class.proposedClass, "IV");
+  assert.strictEqual(result.sectors[0].class.finalClass, null);
   assert.strictEqual(result.sectors[0].class.semaforo, "rojo");
   assert.strictEqual(result.sectors[0].class.delta, 2);
-  assert.strictEqual(result.sectors[0].class.status, "propuesta");
+  assert.strictEqual(result.sectors[0].class.status, "proposed");
 });
 
 testAsync("Analisis: 5 ha con 30 m -> resolucion insuficiente", async () => {
@@ -275,7 +291,10 @@ testAsync("Analisis: 5 ha con 30 m -> resolucion insuficiente", async () => {
     options: { windowM: 30, minCells: 100 },
   });
   assert.strictEqual(result.meta.cells, 56);
-  assert.strictEqual(result.sectors[0].class.status, "resolucion insuficiente");
+  assert.strictEqual(result.sectors[0].status, "insufficient_resolution");
+  assert.strictEqual(result.sectors[0].statusEs, "resolucion insuficiente");
+  assert.strictEqual(result.sectors[0].class.statusEs, "resolucion insuficiente");
+  assert.strictEqual(result.sectors[0].class.proposedClass, null);
   assert.ok(result.warnings.some((text) => text.includes("minimo es 100")));
 });
 
@@ -286,9 +305,11 @@ testAsync("Analisis: DSM calcula pendiente pero no clase", async () => {
     polygon: rect(grid, 10, 10, 20, 20),
     dem: { ...DTM_DECL, product: "DSM", bareEarth: false },
     officialClass: "II",
-    options: { windowM: 10 },
+    options: { windowM: 25 },
   });
-  assert.strictEqual(result.sectors[0].class.status, "no apto");
+  assert.strictEqual(result.sectors[0].class.status, "not_determinable");
+  assert.strictEqual(result.sectors[0].class.statusEs, "no apto");
+  assert.strictEqual(result.sectors[0].class.proposedClass, null);
   assert.strictEqual(result.sectors[0].class.finalClass, null);
   assert.ok(result.warnings.some((text) => text.includes("DSM")));
 });
@@ -299,9 +320,10 @@ testAsync("Analisis: sin carta de suelos -> no determinable", async () => {
     grid,
     polygon: rect(grid, 10, 10, 20, 20),
     dem: validated(),
-    options: { windowM: 10 },
+    options: { windowM: 25 },
   });
-  assert.strictEqual(result.sectors[0].class.status, "no determinable");
+  assert.strictEqual(result.sectors[0].class.status, "not_determinable");
+  assert.strictEqual(result.sectors[0].class.statusEs, "no determinable");
   assert.ok(result.warnings.some((text) => text.includes("carta de suelos")));
 });
 
@@ -312,11 +334,14 @@ testAsync("Analisis: sin validacion -> no validado", async () => {
     polygon: rect(grid, 10, 10, 20, 20),
     dem: { ...DTM_DECL, validation: { status: "pendiente" } },
     officialClass: "II",
-    options: { windowM: 10 },
+    options: { windowM: 25 },
   });
   assert.strictEqual(result.validation.ok, false);
-  assert.strictEqual(result.validation.status, "no validado");
-  assert.strictEqual(result.sectors[0].class.status, "no validado");
+  assert.strictEqual(result.validation.status, "not_validated");
+  assert.strictEqual(result.validation.statusEs, "no validado");
+  assert.strictEqual(result.sectors[0].class.status, "topographic_limit");
+  assert.strictEqual(result.sectors[0].class.statusEs, "no validado");
+  assert.strictEqual(result.sectors[0].class.proposedClass, "III");
 });
 
 testAsync("Analisis: DEM que no cubre el predio se rechaza", async () => {
@@ -407,6 +432,206 @@ testAsync("Analisis: poligono con menos de 3 vertices se rechaza", async () => {
     () => compute.analyze({ grid, polygon: [{ lat: 4.6, lon: -74.1 }, { lat: 4.6, lon: -74.09 }], dem: validated() }),
     (error) => error.code === "DEM_POLYGON"
   );
+});
+
+test("Sectores: hueco y multipoligono rasterizan con regla par-impar", () => {
+  const grid = makeGrid({ width: 44, height: 44 });
+  const outer = rect(grid, 10, 10, 20, 20);
+  const hole = rect(grid, 15, 15, 5, 5);
+  const geometry = { type: "Polygon", coordinates: [outer, hole] };
+  const polygons = compute.normalizeGeometry(geometry);
+  const mask = new Uint8Array(grid.width * grid.height);
+  const raster = compute.rasterizePolygons(polygons, grid, mask);
+  assert.strictEqual(raster.cells, 375, "400 celdas menos el hueco de 25");
+  assert.strictEqual(raster.intersects, true);
+  assert.strictEqual(raster.clipped, false);
+
+  const multi = {
+    type: "MultiPolygon",
+    coordinates: [
+      [rect(grid, 2, 2, 10, 10)],
+      [rect(grid, 25, 25, 10, 10)],
+    ],
+  };
+  const mask2 = new Uint8Array(grid.width * grid.height);
+  const raster2 = compute.rasterizePolygons(compute.normalizeGeometry(multi), grid, mask2);
+  assert.strictEqual(raster2.cells, 200, "dos componentes de 100 celdas");
+  assert.strictEqual(mask2.reduce((sum, value) => sum + value, 0), 200);
+});
+
+test("Zonal: area efectiva, cobertura y clases por area sin inventar probabilidad", () => {
+  const grid = makeGrid({ width: 6, height: 6 });
+  const mask = new Uint8Array(36);
+  for (let row = 2; row <= 4; row += 1) {
+    for (let col = 2; col <= 4; col += 1) mask[row * 6 + col] = 1;
+  }
+  const slope = new Float32Array(36).fill(5);
+  slope[3 * 6 + 3] = NaN;
+  const zonal = compute.zonalSector({
+    grid,
+    win: grid,
+    slope,
+    mask,
+    minCells: 4,
+    raster: { row0: 2, row1: 4, col0: 2, col1: 4, intersects: true, clipped: false },
+  });
+  assert.strictEqual(zonal.cellsGross, 9);
+  assert.strictEqual(zonal.cells, 8);
+  assert.strictEqual(zonal.status, "ok");
+  approx(zonal.coverage, 8 / 9, 1e-9, "cobertura");
+  assert.ok(zonal.areaHa < zonal.areaGrossHa);
+  assert.deepStrictEqual(Object.keys(zonal.slope.classesHa), ["3-7"]);
+  approx(zonal.slope.classShare["3-7"], 1, 1e-12, "share");
+  approx(zonal.slope.classesHa["3-7"], zonal.areaHa, 1e-12, "ha de la banda");
+  approx(zonal.slope.classesPct["3-7"], 100, 1e-9, "porcentaje legado");
+
+  const empty = compute.zonalSector({
+    grid,
+    win: grid,
+    slope: new Float32Array(36).fill(NaN),
+    mask,
+    minCells: 4,
+    raster: { row0: 2, row1: 4, col0: 2, col1: 4, intersects: true },
+  });
+  assert.strictEqual(empty.status, "no_valid_cells");
+  assert.strictEqual(empty.slope.count, 0);
+
+  const noCoverage = compute.zonalSector({
+    grid,
+    win: grid,
+    slope,
+    mask: new Uint8Array(36),
+    minCells: 4,
+    raster: { row0: 0, row1: -1, col0: 0, col1: -1, intersects: false },
+  });
+  assert.strictEqual(noCoverage.status, "no_coverage");
+  assert.strictEqual(noCoverage.coverage, 0);
+});
+
+testAsync("Analisis: hueco reduce el area y no pierde la clase", async () => {
+  const grid = makeGrid({ width: 44, height: 44 });
+  const geometry = {
+    type: "Polygon",
+    coordinates: [rect(grid, 10, 10, 20, 20), rect(grid, 15, 15, 5, 5)],
+  };
+  const result = await compute.analyze({
+    grid,
+    geometry,
+    dem: validated(),
+    officialClass: "II",
+    options: { windowM: 25, minCells: 100 },
+  });
+  const sector = result.sectors[0];
+  assert.strictEqual(sector.cellsGross, 375);
+  assert.strictEqual(sector.cells, 375);
+  assert.strictEqual(sector.status, "ok");
+  approx(sector.areaGrossHa, 375 * CELL_XM * CELL_YM / 10000, 5e-3, "area bruta");
+  approx(sector.areaPolygonHa, 375 * CELL_XM * CELL_YM / 10000, 0.03, "area del poligono con hueco");
+  assert.strictEqual(sector.class.status, "proposed");
+});
+
+testAsync("Analisis: varios sectores conservan ids, areas y contrato", async () => {
+  const grid = makeGrid({ width: 44, height: 44 });
+  const sectors = [
+    { id: "norte", name: "Norte", geometry: { type: "Polygon", coordinates: [rect(grid, 5, 5, 10, 10)] } },
+    { id: "sur", name: "Sur", geometry: { type: "Polygon", coordinates: [rect(grid, 20, 20, 10, 10)] } },
+  ];
+  const result = await compute.analyze({
+    grid,
+    sectors,
+    dem: validated(),
+    officialClass: "II",
+    options: { windowM: 25, minCells: 100 },
+  });
+  assert.strictEqual(result.sectors.length, 2);
+  assert.deepStrictEqual(result.sectors.map((sector) => sector.id), ["norte", "sur"]);
+  assert.strictEqual(result.meta.cells, 200);
+  assert.strictEqual(result.meta.validCells, 200);
+  assert.ok(result.sectors.every((sector) => sector.status === "ok"));
+  approx(
+    result.sectors.reduce((sum, sector) => sum + sector.areaHa, 0),
+    result.meta.areaHa,
+    1e-3,
+    "suma de areas"
+  );
+  assert.strictEqual(result.summary.sectors.length, 2);
+  assert.strictEqual(result.summary.kind, "dem-summary-v2");
+});
+
+testAsync("Analisis: identificador de sector repetido se rechaza", async () => {
+  const grid = makeGrid({ width: 44, height: 44 });
+  const geometry = { type: "Polygon", coordinates: [rect(grid, 5, 5, 10, 10)] };
+  await assert.rejects(
+    () => compute.analyze({
+      grid,
+      sectors: [{ id: "a", geometry }, { id: "a", geometry }],
+      dem: validated(),
+    }),
+    (error) => error.code === "DEM_SECTOR"
+  );
+});
+
+testAsync("Contrato: adaptador BYOD declara licencia, ventana y estados API", async () => {
+  const grid = makeGrid({ width: 44, height: 44 });
+  const result = await compute.analyze({
+    grid,
+    polygon: rect(grid, 10, 10, 20, 20),
+    dem: validated(),
+    officialClass: "II",
+    options: { windowM: 25 },
+  });
+  const response = contract.toSlopeResponse(result);
+  assert.match(response.resultHash, /^sha256:[a-f0-9]{64}$/);
+  assert.strictEqual(response.resultId, result.resultId);
+  assert.strictEqual(response.partial, result.partial);
+  assert.strictEqual(response.meta.windowM, 25);
+  assert.strictEqual(response.meta.radiusCells, 2);
+  assert.strictEqual(response.meta.effectiveBaselineM, result.meta.effectiveBaselineM);
+  approx(response.meta.effectiveBaselineM, 33.305, 0.01, "base efectiva 25 m a 5,55 m");
+  assert.strictEqual(response.meta.license.type, "byod");
+  assert.strictEqual(response.meta.license.redistribution, false);
+  assert.strictEqual(response.meta.validation.status, "validated");
+  assert.strictEqual(response.sectors[0].status, "ok");
+  assert.strictEqual(response.sectors[0].class.status, "proposed");
+  assert.strictEqual(response.sectors[0].class.proposedClass, "III");
+  assert.strictEqual(response.sectors[0].class.finalClass, null);
+  assert.strictEqual(response.sectors[0].slope.classShare["7-12"], 1);
+  assert.strictEqual(response.contractComplete, true);
+
+  const incomplete = JSON.parse(JSON.stringify(result));
+  incomplete.meta.verticalAccuracyM = null;
+  incomplete.dem.verticalAccuracyM = null;
+  incomplete.meta.acquisitionYear = null;
+  incomplete.dem.acquisitionYear = null;
+  incomplete.resultHash = null;
+  incomplete.hash = null;
+  assert.strictEqual(contract.toSlopeResponse(incomplete).contractComplete, false);
+
+  const noLicense = JSON.parse(JSON.stringify(result));
+  noLicense.meta.license.declared = "No declarada";
+  noLicense.dem.license = "No declarada";
+  assert.strictEqual(contract.toSlopeResponse(noLicense).contractComplete, false);
+
+  const noClass = await compute.analyze({
+    grid,
+    polygon: rect(grid, 10, 10, 20, 20),
+    dem: validated(),
+    options: { windowM: 25 },
+  });
+  const noClassResponse = contract.toSlopeResponse(noClass);
+  assert.strictEqual(noClassResponse.sectors[0].class, undefined);
+  assert.strictEqual(noClassResponse.sectors[0].classStatus, "not_determinable");
+
+  const validation = contract.validationBlock({ validation: { status: "no validado", n: 0 }, meta: {} });
+  assert.strictEqual(validation.status, "not_validated");
+  assert.strictEqual(validation.declared, true);
+  assert.strictEqual(
+    contract.validationBlock({ meta: {} }).declared,
+    false
+  );
+  const license = contract.licenseBlock({ dem: { license: "Permiso interno", attribution: "Finca" } });
+  assert.strictEqual(license.type, "byod");
+  assert.strictEqual(license.redistribution, false);
 });
 
 (async () => {

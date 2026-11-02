@@ -11,7 +11,7 @@
   const DEG = Math.PI / 180;
   const CIRCLE_SEGMENTS = 64;
   const APP_NAME = "CAMPO VERDE JRB";
-  const APP_VERSION = "1.3.0";
+  const APP_VERSION = "1.4.0";
   const BRAND_LINE = "AVALÚOS INTEGRALES · Urbanos & Rurales";
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
@@ -21,11 +21,30 @@
   const DEM_MAX_BYTES = 80 * 1024 * 1024;
   const DEM_MAX_CELLS = 16000000;
   const DEM_STATUS_LABELS = {
-    "propuesta": "Propuesta",
+    proposed: "Propuesta",
+    propuesta: "Propuesta",
+    confirmed: "Confirmada",
+    confirmada: "Confirmada",
+    topographic_limit: "Limitante topográfica",
+    "limitante topografica": "Limitante topográfica",
     "no validado": "No validado",
+    not_determinable: "No determinable",
     "no determinable": "No determinable",
     "no apto": "No apto",
+    insufficient_resolution: "Resolución insuficiente",
     "resolucion insuficiente": "Resolución insuficiente",
+    ok: "Ok",
+    no_valid_cells: "Sin celdas válidas",
+    no_coverage: "Sin cobertura",
+  };
+  const DEM_VALIDATION_LABELS = {
+    validated: "Validado (declarado)",
+    validado: "Validado (declarado)",
+    not_validated: "No validado",
+    "no validado": "No validado",
+    failed: "Fallido",
+    fallido: "Fallido",
+    pendiente: "No validado",
   };
   const DEM_BANDS = [
     { id: "0-3", label: "0–3 %", tone: "" },
@@ -3187,7 +3206,7 @@
         ? [
             `Pendiente: media ${demNumber(state.dem.result.slope && state.dem.result.slope.meanPct, 2)} % · P95 ${demNumber(state.dem.result.slope && state.dem.result.slope.p95Pct, 2)} %`,
             `DEM: ${state.dem.result.dem && state.dem.result.dem.product} · ${demNumber(state.dem.result.meta && state.dem.result.meta.resolutionM, 2)} m · ${state.dem.result.dem && state.dem.result.dem.license}`,
-            `Clase propuesta: ${(state.dem.result.sectors && state.dem.result.sectors[0] && state.dem.result.sectors[0].class && state.dem.result.sectors[0].class.finalClass) || "no determinable"}`,
+            `Clase propuesta: ${(state.dem.result.sectors && state.dem.result.sectors[0] && demProposedClass(state.dem.result.sectors[0].class)) || "no determinable"}`,
           ]
         : []),
       `Huella: ${payloadHash().slice(0, 16)}…`,
@@ -3318,7 +3337,7 @@
       const cls = (result.sectors && result.sectors[0] && result.sectors[0].class) || {};
       lines.push(`Pendiente: media ${demNumber(slope.meanPct, 2)} % · P95 ${demNumber(slope.p95Pct, 2)} % · máx ${demNumber(slope.maxPct, 2)} %`);
       lines.push(`DEM: ${result.dem && result.dem.product} · ${demNumber(result.meta && result.meta.resolutionM, 2)} m · ${result.dem && result.dem.license}`);
-      lines.push(`Clase propuesta: ${cls.finalClass || DEM_STATUS_LABELS[cls.status] || "no determinable"}${demStaleReason(result, state.dem.declaration) ? " (resultado anterior)" : ""}`);
+      lines.push(`Clase propuesta: ${demProposedClass(cls) || demStatusLabel(cls.status, cls.statusEs)}${demStaleReason(result, state.dem.declaration) ? " (resultado anterior)" : ""}`);
     }
     lines.push(`Vértices: ${metrics.n}`);
     lines.push(`Método: ${methodLabel()}`);
@@ -4144,6 +4163,39 @@
     return Number.isFinite(+value) ? fmt(+value, digits) : "—";
   }
 
+  function demStatusLabel(status, statusEs) {
+    const direct = String(statusEs || "").toLowerCase();
+    const api = String(status || "").toLowerCase();
+    return DEM_STATUS_LABELS[direct] || DEM_STATUS_LABELS[api] || statusEs || status || "sin estado";
+  }
+
+  function demValidationLabel(validation) {
+    if (!validation) return "No validado";
+    const key = String(validation.status || "").toLowerCase();
+    return DEM_VALIDATION_LABELS[key] || DEM_VALIDATION_LABELS[String(validation.statusEs || "").toLowerCase()] || "No validado";
+  }
+
+  function demProposedClass(cls) {
+    return (cls && (cls.proposedClass || cls.finalClass)) || null;
+  }
+
+  function demClassPercent(slope, bandId) {
+    if (!slope) return 0;
+    const share = slope.classShare ? +slope.classShare[bandId] : NaN;
+    if (Number.isFinite(share)) return clamp(share * 100, 0, 100);
+    const pct = slope.classesPct ? +slope.classesPct[bandId] : NaN;
+    return Number.isFinite(pct) ? clamp(pct, 0, 100) : 0;
+  }
+
+  function demEffectiveBaseline(meta) {
+    if (!meta) return null;
+    const baseline = +meta.effectiveBaselineM;
+    if (Number.isFinite(baseline) && baseline > 0) return baseline;
+    const legacy = +meta.effectiveWindowM;
+    if (Number.isFinite(legacy) && legacy > 0) return legacy;
+    return null;
+  }
+
   function setDemStatus(kind, text) {
     if (!el.demStatus) return;
     el.demStatus.className = `dem-status${kind ? ` is-${kind}` : ""}`;
@@ -4280,30 +4332,31 @@
     setText(el.demP95, demNumber(slope.p95Pct, 2));
     setText(el.demMax, demNumber(slope.maxPct, 2));
 
-    const classes = slope.classesPct || {};
     el.demBars.innerHTML = DEM_BANDS.map((band) => {
-      const value = Number.isFinite(+classes[band.id]) ? +classes[band.id] : 0;
+      const value = demClassPercent(slope, band.id);
       const width = clamp(value, 0, 100);
       return `<div class="dem-bar ${band.tone}"><span>${band.label}</span><i><b style="width:${width.toFixed(1)}%"></b></i><em>${fmt(value, 1)} %</em></div>`;
     }).join("");
 
     setText(el.demOfficial, cls.officialClass || "Sin carta");
     setText(el.demSlopeClass, cls.slopeClass || "—");
-    setText(el.demFinalClass, cls.finalClass || DEM_STATUS_LABELS[cls.status] || "—");
-    const statusLabel = DEM_STATUS_LABELS[cls.status] || cls.status || "sin estado";
+    setText(el.demFinalClass, demProposedClass(cls) || demStatusLabel(cls.status, cls.statusEs));
+    const statusLabel = demStatusLabel(cls.status, cls.statusEs);
     const note = isDsm
       ? "No apto: un DSM incluye vegetación y edificaciones. Solo se informa la pendiente de superficie."
       : `${statusLabel} · ${cls.limitingFactor || "sin limitante topográfica"} · base: ${cls.basis || "pendiente P95"}.`;
     setText(el.demClassNote, note);
 
+    const baseline = demEffectiveBaseline(meta);
     const rows = [
       ["Resolución", `${demNumber(meta.resolutionM, 1)} m`],
-      ["Ventana", `${demNumber(meta.windowM, 0)} m (soporte ${demNumber(meta.effectiveWindowM, 0)} m)`],
+      ["Ventana", `${demNumber(meta.windowM, 0)} m${baseline !== null ? ` (soporte ${demNumber(baseline, 1)} m)` : ""}`],
       ["Incertidumbre", slope.uncertaintyPct !== null && slope.uncertaintyPct !== undefined ? `± ${demNumber(slope.uncertaintyPct, 2)} %` : "—"],
       ["Área de celdas", `${demNumber(meta.areaHa, 4)} ha`],
+      ["Cobertura", Number.isFinite(+meta.coverage) ? `${demNumber(+meta.coverage * 100, 1)} %` : "—"],
       ["Celdas válidas", `${fmtInt(meta.validCells || 0)} / ${fmtInt(meta.cells || 0)}`],
-      ["NODATA", `${demNumber(meta.nodataPct, 1)} %`],
-      ["Validación", `${validation.status || "no validado"}${validation.n ? ` · n = ${fmtInt(validation.n)}` : ""}`],
+      ["Sin pendiente", `${demNumber(meta.nodataPct, 1)} %`],
+      ["Validación", `${demValidationLabel(validation)}${validation.n ? ` · n = ${fmtInt(validation.n)}` : ""}`],
       ["Calculado", result.computedAt ? formatDateTime(result.computedAt) : "—"],
     ];
     el.demMeta.innerHTML = rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("");
@@ -4322,22 +4375,22 @@
     const sector = result.sectors && result.sectors[0] ? result.sectors[0] : {};
     const cls = sector.class || {};
     const validation = result.validation || {};
-    const classes = slope.classesPct || {};
     const bands = DEM_BANDS
-      .filter((band) => Number.isFinite(+classes[band.id]) && +classes[band.id] > 0)
-      .map((band) => `${band.label}: ${fmt(+classes[band.id], 1)} %`)
+      .filter((band) => demClassPercent(slope, band.id) > 0)
+      .map((band) => `${band.label}: ${fmt(demClassPercent(slope, band.id), 1)} %`)
       .join(" · ");
+    const baseline = demEffectiveBaseline(result.meta);
     return [
       "CAMPO VERDE JRB · Pendiente del terreno",
       `Predio: ${state.projectName || "Predio sin nombre"}`,
       `DEM: ${dem.name || "DEM propio"} · ${dem.product} · ${demNumber(result.meta && result.meta.resolutionM, 1)} m · ${dem.acquisitionYear || "año no declarado"}`,
       `Licencia: ${dem.license || "no declarada"}`,
-      `Validación: ${validation.status || "no validado"}${validation.n ? ` (n = ${validation.n})` : ""}`,
+      `Validación: ${demValidationLabel(validation)}${validation.n ? ` (n = ${validation.n})` : ""}`,
       `Pendiente: media ${demNumber(slope.meanPct, 2)} % · P95 ${demNumber(slope.p95Pct, 2)} % · máx ${demNumber(slope.maxPct, 2)} %`,
       bands ? `Distribución: ${bands}` : "Distribución: sin datos",
-      `Clase oficial: ${cls.officialClass || "sin carta"} · propuesta: ${cls.finalClass || DEM_STATUS_LABELS[cls.status] || "no determinable"} (${DEM_STATUS_LABELS[cls.status] || cls.status || "sin estado"})`,
-      `Ventana: ${demNumber(result.meta && result.meta.windowM, 0)} m · incertidumbre ± ${demNumber(slope.uncertaintyPct, 2)} %`,
-      `Huella SHA-256: ${result.hash}`,
+      `Clase oficial: ${cls.officialClass || "sin carta"} · propuesta: ${demProposedClass(cls) || demStatusLabel(cls.status, cls.statusEs)} (${demStatusLabel(cls.status, cls.statusEs)})`,
+      `Ventana: ${demNumber(result.meta && result.meta.windowM, 0)} m${baseline !== null ? ` · base ${demNumber(baseline, 1)} m` : ""} · incertidumbre ± ${demNumber(slope.uncertaintyPct, 2)} %`,
+      `Huella SHA-256: ${result.resultHash || result.hash}`,
       "La pendiente no reemplaza la carta de suelos ni la firma de un profesional.",
     ].join("\n");
   }
@@ -4376,21 +4429,28 @@
       atribucion: dem.attribution || null,
       metodo_dem: dem.method || null,
       ventana_m: meta.windowM ?? null,
+      base_efectiva_m: demEffectiveBaseline(meta),
+      cobertura: meta.coverage ?? null,
       incertidumbre_pct: slope.uncertaintyPct ?? null,
       pendiente_media_pct: slope.meanPct ?? null,
       pendiente_p95_pct: slope.p95Pct ?? null,
       pendiente_max_pct: slope.maxPct ?? null,
       celdas_validas: meta.validCells ?? null,
+      celdas_brutas: meta.cells ?? null,
       celdas_minimas: sector.class && sector.class.minCells ? sector.class.minCells : 100,
-      validacion_estado: validation.status || "no validado",
+      validacion_estado: validation.status || "not_validated",
+      validacion_estado_es: demValidationLabel(validation),
       validacion_n: validation.n || 0,
       clase_oficial: cls.officialClass || null,
       clase_pendiente: cls.slopeClass || null,
-      clase_propuesta: cls.finalClass || null,
+      clase_propuesta: demProposedClass(cls),
       clase_estado: cls.status || null,
-      clase_confirmada: false,
+      clase_estado_es: demStatusLabel(cls.status, cls.statusEs),
+      clase_confirmada: cls.status === "confirmed",
       resultado_obsoleto: Boolean(demStaleReason(result, declaration)),
       huella_dem_sha256: result.hash || null,
+      huella_dem_result_hash: result.resultHash || null,
+      id_resultado_dem: result.resultId || null,
     };
   }
 
@@ -4409,14 +4469,10 @@
     const validation = result.validation || {};
     const stale = demStaleReason(result, declaration);
     const official = cls.officialClass || "sin carta de suelos";
-    const statusLabel = DEM_STATUS_LABELS[cls.status] || cls.status || "sin estado";
+    const statusLabel = demStatusLabel(cls.status, cls.statusEs);
+    const baseline = demEffectiveBaseline(meta);
     const bands = DEM_BANDS
-      .map((band) => {
-        const value = Number.isFinite(+(slope.classesPct && slope.classesPct[band.id]))
-          ? +(slope.classesPct[band.id])
-          : 0;
-        return `${band.label}: ${fmt(value, 1)} %`;
-      })
+      .map((band) => `${band.label}: ${fmt(demClassPercent(slope, band.id), 1)} %`)
       .join(" · ");
     const warnings = Array.isArray(result.warnings) ? result.warnings : [];
     const declared = [
@@ -4445,12 +4501,13 @@
         </tr></tbody>
       </table>
       <table class="pr-table pr-table-compact">
-        <thead><tr><th>Pendiente media</th><th>P95</th><th>Máxima</th><th>Ventana</th><th>Incertidumbre</th><th>Celdas válidas</th></tr></thead>
+        <thead><tr><th>Pendiente media</th><th>P95</th><th>Máxima</th><th>Ventana</th><th>Base efectiva</th><th>Incertidumbre</th><th>Celdas válidas</th></tr></thead>
         <tbody><tr>
           <td>${demNumber(slope.meanPct, 2)} %</td>
           <td>${demNumber(slope.p95Pct, 2)} %</td>
           <td>${demNumber(slope.maxPct, 2)} %</td>
           <td>${demNumber(meta.windowM, 0)} m</td>
+          <td>${baseline !== null ? `${demNumber(baseline, 1)} m` : "—"}</td>
           <td>${slope.uncertaintyPct === null || slope.uncertaintyPct === undefined ? "—" : `± ${demNumber(slope.uncertaintyPct, 2)} %`}</td>
           <td>${fmtInt(meta.validCells || 0)} / ${fmtInt(meta.cells || 0)}</td>
         </tr></tbody>
@@ -4461,16 +4518,16 @@
         <tbody><tr>
           <td>${escapeHtml(official)}</td>
           <td>${escapeHtml(cls.slopeClass || "—")}</td>
-          <td>${escapeHtml(cls.finalClass || statusLabel)}</td>
+          <td>${escapeHtml(demProposedClass(cls) || statusLabel)}</td>
           <td>${escapeHtml(statusLabel)}</td>
-          <td>${escapeHtml(validation.status || "no validado")}${validation.n ? ` · n = ${fmtInt(validation.n)}` : ""}</td>
+          <td>${escapeHtml(demValidationLabel(validation))}${validation.n ? ` · n = ${fmtInt(validation.n)}` : ""}</td>
         </tr></tbody>
       </table>
       ${warnings.length ? `<ul class="pr-dem-warnings">${warnings.map((text) => `<li>${escapeHtml(text)}</li>`).join("")}</ul>` : ""}
       <p class="pr-footnote">La clase oficial IGAC/UPRA es la base; la pendiente solo puede empeorarla. La app no certifica la clase: la propuesta queda sujeta a la carta de suelos y a revisión profesional. ${
         cls.canConfirm ? "" : "Ningún resultado se marca como confirmado."
       }</p>
-      <p class="pr-hash"><strong>Huella SHA-256 del análisis DEM:</strong> ${escapeHtml(result.hash || "—")}</p>`;
+      <p class="pr-hash"><strong>Huella SHA-256 del análisis DEM:</strong> ${escapeHtml(result.resultHash || result.hash || "—")}</p>`;
   }
 
   function applyDemToUI() {
@@ -4697,7 +4754,7 @@
 
     let worker;
     try {
-      worker = new Worker("dem/dem-worker.js");
+      worker = new Worker("dem/dem-worker.js?v=1.4.0");
     } catch (error) {
       setDemError("Este navegador no pudo iniciar el cálculo. Abre la app desde HTTPS o localhost, no como archivo local.");
       return;

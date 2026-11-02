@@ -5,7 +5,12 @@
    ============================================================ */
 "use strict";
 
-importScripts("dem-core.js", "dem-file.js", "dem-compute.js");
+importScripts(
+  "dem-core.js?v=1.4.0",
+  "dem-file.js?v=1.4.0",
+  "dem-contract.js?v=1.4.0",
+  "dem-compute.js?v=1.4.0"
+);
 
 self.onmessage = async (event) => {
   const message = event.data || {};
@@ -19,6 +24,9 @@ self.onmessage = async (event) => {
     const result = await self.CVDemCompute.analyze({
       grid,
       polygon: message.polygon,
+      geometry: message.geometry || null,
+      sectors: Array.isArray(message.sectors) ? message.sectors : null,
+      sectorName: message.sectorName || null,
       dem: message.dem,
       officialClass: message.officialClass,
       options: message.options || {},
