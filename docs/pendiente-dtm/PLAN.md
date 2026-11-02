@@ -1,9 +1,9 @@
 # Módulo DEM · plan de trabajo
 
-- **Rama:** `feat/pendiente-dtm` (no publicada)
-- **Base:** `main` en `6c3d80e`; esta rama usa el service worker `campoverdejr-v8`
-- **Fecha:** 2026-11-01
-- **Estado:** BYOD (A) integrado y reconciliado con el contrato v1; free/pro siguen bloqueados por licencias
+- **Rama:** `main` publicada; el desarrollo original está en `feat/pendiente-dtm`
+- **Base:** `main` con merge `1389cc6`; esta versión usa el service worker `campoverdejr-v9`
+- **Fecha:** 2026-11-02
+- **Estado:** BYOD e importación de polígonos publicados; free/pro siguen bloqueados por licencias
 
 ## Qué existe en esta rama
 
@@ -16,20 +16,23 @@ dem/
   dem-compute.js        Cálculo con sectores, huecos, área, ventana y hash
   dem-contract.js       Adaptador al contrato API v1 (`/slope`)
   dem-worker.js         Web Worker: lee, calcula y devuelve solo el resultado
+geo/
+  import.js             Importador de polígonos KML, GeoJSON, CSV y TXT
 tests/
   dem-core.test.js      31 pruebas numéricas, estados y contrato
   registry.test.js      11 pruebas de integridad del registro y ruleset
   dem-file.test.js      18 pruebas de ASC/GeoTIFF y rechazos
   dem-compute.test.js   28 pruebas de recorte, sectores, pendiente, clase y hash
+  geo-import.test.js     7 pruebas de KML, GeoJSON y coordenadas
 docs/pendiente-dtm/
   ADR-0001-licencias.md Bloqueo legal y opciones
   CONTRATO.md           Mapeo de los 14 vectores y estados API
   PLAN.md               Este documento
 ```
 
-La app ya incluye el panel **Pendiente del terreno** (BYOD), el informe y las
-exportaciones. El DEM crudo nunca se persiste: solo la declaración y el
-resultado compacto en `state.dem`. La rama no se ha publicado en `main`.
+La app ya incluye el panel **Pendiente del terreno** (BYOD), el informe, las
+exportaciones y la importación de polígonos. El DEM crudo nunca se persiste:
+solo la declaración y el resultado compacto en `state.dem`.
 
 ## Ejecutar pruebas
 
@@ -39,9 +42,10 @@ node tests\dem-core.test.js
 node tests\registry.test.js
 node tests\dem-file.test.js
 node tests\dem-compute.test.js
+node tests\geo-import.test.js
 ```
 
-Resultado actual: **31/31**, **11/11**, **18/18** y **28/28**.
+Resultado actual: **31/31**, **11/11**, **18/18**, **28/28** y **7/7**.
 
 ## Fases
 
@@ -80,6 +84,7 @@ Pendiente:
 
 Hecho:
 - `sectors` con anillo, huecos y multipolígono; rasterización por regla par-impar.
+- Importación de un polígono desde KML, GeoJSON, CSV o TXT en la pestaña Coordenadas.
 - Área efectiva, área bruta, cobertura, celdas válidas y celdas rasterizadas.
 - Clase oficial IGAC/UPRA como base, semáforo y propuesta asistida.
 - `class.finalClass` queda `null`: solo una confirmación humana puede fijarla.

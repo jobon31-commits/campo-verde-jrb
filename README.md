@@ -17,7 +17,7 @@ Abre el enlace en el móvil e instálala como PWA (ver más abajo).
 La app instalada se actualiza sola al abrirla con internet: descarga la versión nueva, elimina la caché anterior y conserva los casos guardados. **No hace falta desinstalar.**
 
 - En el pie se muestra la **versión en uso** y el botón **Buscar actualización**, que consulta el service worker, aplica la versión nueva y recarga la app.
-- Los archivos se referencian con su versión (`app.js?v=1.4.0`, `styles.css?v=1.4.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
+- Los archivos se referencian con su versión (`app.js?v=1.5.0`, `styles.css?v=1.5.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
 - La primera apertura tras una publicación puede mostrar la versión anterior; al abrir de nuevo (o pulsar **Buscar actualización**) queda la última.
 - Desinstalar puede borrar los casos guardados en el dispositivo. Exporta un **respaldo JSON** antes de hacerlo.
 
@@ -27,6 +27,8 @@ La app instalada se actualiza sola al abrirla con internet: descarga la versión
   1. **GPS:** recorrido del lindero con el teléfono, con filtro de precisión y distancia mínima entre vértices. El botón **Marcar vértice** fuerza el punto en la posición actual, muestra sus coordenadas (decimales y DMS), permite copiarlas y confirma con vibración y sonido. Si una esquina no se marca sola, este botón la registra.
   2. **Linderos:** cálculos a partir de medidas de cinta o estación total (cuadrilátero con diagonal, triángulo, rectángulo o círculo). El croquis se ancla en la **ubicación del plano** que indiques (latitud/longitud WGS 84) o en tu posición GPS actual.
   3. **Coordenadas:** carga manual o importación de una lista en grados decimales WGS 84.
+
+- **Cargar polígono desde archivo:** importa KML, GeoJSON, CSV o TXT desde **Coordenadas**. Toma el anillo exterior, valida rangos y reemplaza el croquis. En el móvil elige **Archivos** o **Documentos**, no la galería de fotos.
 
 - **Casos independientes:** cada caso guarda su propio croquis, método, ubicación, área de referencia, lotes, repeticiones, fotos y observaciones. Los cambios se guardan solos; puedes crear hasta 15 casos, abrirlos y eliminarlos desde el panel **«Casos guardados»**. El botón **Guardar ahora** fuerza el guardado.
 
@@ -107,6 +109,7 @@ Luego abre `http://localhost:8899/`.
 index.html        Estructura, paneles, PWA e informe imprimible
 styles.css        Diseño, croquis, tablas, adaptación móvil e impresión
 app.js            Estado, casos, cálculos geodésicos, croquis, fotos, informe y persistencia
+geo/import.js     Importador de polígonos KML, GeoJSON, CSV y TXT
 dem/              Lector DEM, núcleo, cálculo, worker y adaptador de contrato
 manifest.json     Manifest de instalación (nombre, iconos, colores)
 sw.js             Service worker: caché y funcionamiento sin conexión
