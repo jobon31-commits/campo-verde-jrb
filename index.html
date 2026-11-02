@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Campo Verde JRB">
   <meta name="color-scheme" content="light">
-  <link rel="stylesheet" href="styles.css?v=1.4.0">
+  <link rel="stylesheet" href="styles.css?v=1.5.0">
 </head>
 <body>
   <!-- Sprite de iconos -->
@@ -309,6 +309,20 @@
           <p class="form-error" id="coordError" hidden></p>
 
           <details class="import-box">
+            <summary>Cargar polígono desde archivo</summary>
+            <p class="micro">Acepta <b>KML</b>, <b>GeoJSON</b>, <b>CSV</b> o <b>TXT</b>. Reemplaza el croquis actual. En el móvil elige <b>Archivos</b> o <b>Documentos</b>, no la galería de fotos.</p>
+            <div class="btn-row">
+              <button class="btn btn-outline" id="polygonFileBtn" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                <span>Elegir archivo</span>
+              </button>
+              <input id="polygonFile" type="file" accept=".kml,.geojson,.json,.csv,.txt,application/vnd.google-earth.kml+xml,application/geo+json,application/json,text/csv,text/plain" hidden>
+            </div>
+            <p class="micro" id="polygonImportNote" hidden></p>
+            <p class="form-error" id="polygonImportError" hidden></p>
+          </details>
+
+          <details class="import-box">
             <summary>Importar una lista de coordenadas</summary>
             <textarea id="coordImport" rows="5" aria-label="Lista de coordenadas para importar" placeholder="-34.901200, -60.301100&#10;-34.899800, -60.301300&#10;-34.899900, -60.299600&#10;-34.901300, -60.299500" spellcheck="false"></textarea>
             <p class="micro">Un vértice por línea. Acepta <b>lat, lon</b>, <b>lat; lon</b> o valores separados por espacios.</p>
@@ -546,8 +560,8 @@
               <label class="dem-drop" id="demDrop" for="demFile">
                 <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg>
                 <strong id="demDropTitle">Elegir archivo DEM</strong>
-                <span id="demDropText">.asc, .tif o .tiff · máx. 80 MB</span>
-                <input id="demFile" type="file" accept=".asc,.txt,.tif,.tiff" hidden>
+                <span id="demDropText">.asc, .tif o .tiff · en el móvil elige Archivos / Documentos</span>
+                <input id="demFile" type="file" accept="*/*" hidden>
               </label>
               <p class="micro" id="demFileInfo">El DEM debe cubrir todo el predio. Límite: 16 millones de celdas.</p>
 
@@ -719,6 +733,7 @@
   <input id="restoreInput" type="file" accept=".json,application/json" hidden>
   <section id="printReport" class="print-report" aria-hidden="true"></section>
 
-  <script src="app.js?v=1.4.0"></script>
+  <script src="geo/import.js?v=1.5.0"></script>
+  <script src="app.js?v=1.5.0"></script>
 </body>
 </html>

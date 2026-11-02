@@ -11,7 +11,7 @@
   const DEG = Math.PI / 180;
   const CIRCLE_SEGMENTS = 64;
   const APP_NAME = "CAMPO VERDE JRB";
-  const APP_VERSION = "1.4.0";
+  const APP_VERSION = "1.5.0";
   const BRAND_LINE = "AVALÚOS INTEGRALES · Urbanos & Rurales";
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
@@ -619,6 +619,10 @@
     coordAppend: $("#coordAppend"),
     coordReplace: $("#coordReplace"),
     importError: $("#importError"),
+    polygonFile: $("#polygonFile"),
+    polygonFileBtn: $("#polygonFileBtn"),
+    polygonImportError: $("#polygonImportError"),
+    polygonImportNote: $("#polygonImportNote"),
     mapStage: $("#mapStage"),
     mapCanvas: $("#mapCanvas"),
     mapWarning: $("#mapWarning"),
@@ -3140,6 +3144,66 @@
     showToast(`${points.length} ${points.length === 1 ? "vértice importado" : "vértices importados"}.`);
   }
 
+  function setPolygonImportError(message) {
+    if (!el.polygonImportError) return;
+    el.polygonImportError.textContent = message || "";
+    el.polygonImportError.hidden = !message;
+  }
+
+  function setPolygonImportNote(message) {
+    if (!el.polygonImportNote) return;
+    el.polygonImportNote.textContent = message || "";
+    el.polygonImportNote.hidden = !message;
+  }
+
+  function readFileAsText(file) {
+    if (file && typeof file.text === "function") return file.text();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("No se pudo leer el archivo."));
+      reader.readAsText(file);
+    });
+  }
+
+  async function importPolygonFile(file) {
+    if (!file) return;
+    setPolygonImportError("");
+    setPolygonImportNote("");
+    if (file.size > 10 * 1024 * 1024) {
+      setPolygonImportError("El archivo supera 10 MB. Recorta el polígono o expórtalo de nuevo.");
+      return;
+    }
+    if (!window.CVGeoImport || typeof window.CVGeoImport.parsePolygonText !== "function") {
+      setPolygonImportError("El importador no está disponible. Recarga la app.");
+      return;
+    }
+    let text;
+    try {
+      text = await readFileAsText(file);
+    } catch (error) {
+      setPolygonImportError("No se pudo leer el archivo. Vuelve a seleccionarlo.");
+      return;
+    }
+    let parsed;
+    try {
+      parsed = window.CVGeoImport.parsePolygonText(text, file.name);
+    } catch (error) {
+      setPolygonImportError(error && error.message ? error.message : "No se pudo interpretar el archivo.");
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.points) || parsed.points.length < 3) {
+      setPolygonImportError("El archivo no contiene un polígono con al menos 3 vértices.");
+      return;
+    }
+    const ref = centroid(parsed.points);
+    applyPoints(parsed.points, "coords", { ref, fit: true });
+    el.coordImport.value = "";
+    el.importError.hidden = true;
+    setPolygonImportNote((parsed.warnings || []).join(" "));
+    showToast(`${parsed.points.length} vértices cargados desde ${parsed.format}.`);
+  }
+
   /* ---------- Exportación y reporte ---------- */
 
   function exportBaseName() {
@@ -4066,6 +4130,20 @@
     el.coordLocate.addEventListener("click", useGpsForCoordinate);
     el.coordAppend.addEventListener("click", () => importCoordinates(false));
     el.coordReplace.addEventListener("click", () => importCoordinates(true));
+    if (el.polygonFileBtn) {
+      el.polygonFileBtn.addEventListener("click", () => {
+        setPolygonImportError("");
+        setPolygonImportNote("");
+        if (el.polygonFile) el.polygonFile.click();
+      });
+    }
+    if (el.polygonFile) {
+      el.polygonFile.addEventListener("change", async () => {
+        const file = el.polygonFile.files && el.polygonFile.files[0];
+        if (file) await importPolygonFile(file);
+        el.polygonFile.value = "";
+      });
+    }
     [el.coordLat, el.coordLon].forEach((input) => {
       input.addEventListener("input", () => coordsError(""));
       input.addEventListener("keydown", (event) => {
@@ -4571,7 +4649,7 @@
       renderDemResult(result);
     } else {
       setText(el.demDropTitle, "Elegir archivo DEM");
-      setText(el.demDropText, ".asc, .tif o .tiff · máx. 80 MB");
+      setText(el.demDropText, ".asc, .tif o .tiff · en el móvil elige Archivos / Documentos");
       setText(el.demFileInfo, "El DEM debe cubrir todo el predio. Límite: 16 millones de celdas.");
       renderDemEmpty();
     }
@@ -4591,7 +4669,7 @@
     if (!file) return;
     const name = String(file.name || "");
     if (!/\.(asc|txt|tif|tiff)$/i.test(name)) {
-      setDemError("Formato no soportado. Usa .asc, .tif o .tiff.");
+      setDemError("Formato no soportado. Usa .asc, .tif o .tiff desde Archivos o Documentos, no desde Fotos.");
       return;
     }
     if (!file.size) {
@@ -4657,7 +4735,7 @@
       return;
     }
     if (!demSelectedFile) {
-      setDemError("Elige un archivo .asc, .tif o .tiff.");
+      setDemError("Elige un archivo .asc, .tif o .tiff desde Archivos o Documentos.");
       return;
     }
     const product = el.demProduct.value === "DSM" ? "DSM" : "DTM";
@@ -4879,6 +4957,8 @@
     el.lotCrop.value = "";
     el.lotArea.value = "";
     el.importError.hidden = true;
+    setPolygonImportError("");
+    setPolygonImportNote("");
     el.coordError.hidden = true;
     el.lotError.hidden = true;
     el.shapeErrors.hidden = true;
