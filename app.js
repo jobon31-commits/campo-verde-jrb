@@ -11,13 +11,50 @@
   const DEG = Math.PI / 180;
   const CIRCLE_SEGMENTS = 64;
   const APP_NAME = "CAMPO VERDE JRB";
-  const APP_VERSION = "1.2.0";
+  const APP_VERSION = "1.4.0";
   const BRAND_LINE = "AVALÚOS INTEGRALES · Urbanos & Rurales";
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
   const CASES_KEY = "campoverdejr.cases.v1";
   const SOUND_KEY = "campoverdejr.sound.v1";
   const MAX_CASES = 15;
+  const DEM_MAX_BYTES = 80 * 1024 * 1024;
+  const DEM_MAX_CELLS = 16000000;
+  const DEM_STATUS_LABELS = {
+    proposed: "Propuesta",
+    propuesta: "Propuesta",
+    confirmed: "Confirmada",
+    confirmada: "Confirmada",
+    topographic_limit: "Limitante topográfica",
+    "limitante topografica": "Limitante topográfica",
+    "no validado": "No validado",
+    not_determinable: "No determinable",
+    "no determinable": "No determinable",
+    "no apto": "No apto",
+    insufficient_resolution: "Resolución insuficiente",
+    "resolucion insuficiente": "Resolución insuficiente",
+    ok: "Ok",
+    no_valid_cells: "Sin celdas válidas",
+    no_coverage: "Sin cobertura",
+  };
+  const DEM_VALIDATION_LABELS = {
+    validated: "Validado (declarado)",
+    validado: "Validado (declarado)",
+    not_validated: "No validado",
+    "no validado": "No validado",
+    failed: "Fallido",
+    fallido: "Fallido",
+    pendiente: "No validado",
+  };
+  const DEM_BANDS = [
+    { id: "0-3", label: "0–3 %", tone: "" },
+    { id: "3-7", label: "3–7 %", tone: "" },
+    { id: "7-12", label: "7–12 %", tone: "is-warn" },
+    { id: "12-25", label: "12–25 %", tone: "is-danger" },
+    { id: "25-50", label: "25–50 %", tone: "is-danger" },
+    { id: "50-75", label: "50–75 %", tone: "is-danger" },
+    { id: ">75", label: "> 75 %", tone: "is-danger" },
+  ];
   const DEMO_REF = { lat: -34.9012, lon: -60.3011 };
   const DEMO_LOCALS = [[-95, -66], [95, -66], [88, 66], [-98, 66]];
   const MAX_PHOTOS = 8;
@@ -81,9 +118,14 @@
     return Number.isFinite(parsed) ? parsed : NaN;
   }
 
+  function optionalNumber(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   function vertexLabel(index) {
-    let n = index;
-    let label = "";
+    let n = index;    let label = "";
     do {
       label = String.fromCharCode(65 + (n % 26)) + label;
       n = Math.floor(n / 26) - 1;
@@ -268,6 +310,7 @@
         data: photo.data,
       })),
       notes: source.notes,
+      dem: source.dem || null,
       updatedAt: source.updatedAt,
     };
   }
@@ -440,6 +483,7 @@
       repetitions: [],
       photos: [],
       notes: "",
+      dem: null,
       updatedAt: null,
     };
   }
@@ -456,6 +500,7 @@
       repetitions: [],
       photos: [],
       notes: "",
+      dem: null,
       updatedAt: null,
     };
   }
@@ -501,6 +546,11 @@
   let toastTimer = null;
   let reportDirty = true;
   let deferredInstallPrompt = null;
+  let demWorker = null;
+  let demSelectedFile = null;
+  let demBusy = false;
+  let demFormDirty = false;
+  let demRequestId = 0;
 
   const el = {
     projectName: $("#projectName"),
@@ -624,6 +674,53 @@
     toast: $("#toast"),
     printReport: $("#printReport"),
     restoreInput: $("#restoreInput"),
+    demPanel: $("#demPanel"),
+    demStatus: $("#demStatus"),
+    demStatusText: $("#demStatusText"),
+    demSubtitle: $("#demSubtitle"),
+    demFile: $("#demFile"),
+    demDrop: $("#demDrop"),
+    demDropTitle: $("#demDropTitle"),
+    demDropText: $("#demDropText"),
+    demFileInfo: $("#demFileInfo"),
+    demProduct: $("#demProduct"),
+    demAccuracy: $("#demAccuracy"),
+    demSource: $("#demSource"),
+    demYear: $("#demYear"),
+    demLicense: $("#demLicense"),
+    demOfficialClass: $("#demOfficialClass"),
+    demBareEarth: $("#demBareEarth"),
+    demValidationSource: $("#demValidationSource"),
+    demValidationN: $("#demValidationN"),
+    demValidationBias: $("#demValidationBias"),
+    demValidationRmse: $("#demValidationRmse"),
+    demAnalyze: $("#demAnalyze"),
+    demAnalyzeText: $("#demAnalyzeText"),
+    demClear: $("#demClear"),
+    demError: $("#demError"),
+    demProgress: $("#demProgress"),
+    demProgressBar: $("#demProgressBar"),
+    demProgressText: $("#demProgressText"),
+    demResults: $("#demResults"),
+    demEmpty: $("#demEmpty"),
+    demResultBody: $("#demResultBody"),
+    demResultBadge: $("#demResultBadge"),
+    demResultResolution: $("#demResultResolution"),
+    demValidationBadge: $("#demValidationBadge"),
+    demResultSource: $("#demResultSource"),
+    demStaleNote: $("#demStaleNote"),
+    demMean: $("#demMean"),
+    demP95: $("#demP95"),
+    demMax: $("#demMax"),
+    demBars: $("#demBars"),
+    demOfficial: $("#demOfficial"),
+    demSlopeClass: $("#demSlopeClass"),
+    demFinalClass: $("#demFinalClass"),
+    demClassNote: $("#demClassNote"),
+    demMeta: $("#demMeta"),
+    demWarnings: $("#demWarnings"),
+    demHash: $("#demHash"),
+    demCopy: $("#demCopy"),
   };
 
   function clonePoints(points) {
@@ -688,6 +785,65 @@
     }).filter(Boolean);
   }
 
+  function normalizeDemValidation(raw) {
+    const value = raw && typeof raw === "object" ? raw : {};
+    const source = String(value.source || "").slice(0, 40);
+    const n = Number.isFinite(+value.n) && +value.n > 0 ? Math.trunc(+value.n) : 0;
+    const biasM = optionalNumber(value.biasM);
+    const rmseM = optionalNumber(value.rmseM);
+    return {
+      source,
+      n,
+      biasM,
+      rmseM,
+      status: source && n > 0 && biasM !== null ? "validado" : "pendiente",
+      date: typeof value.date === "string" ? value.date : null,
+      declared: true,
+    };
+  }
+
+  function normalizeDem(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const declarationRaw = raw.declaration && typeof raw.declaration === "object" ? raw.declaration : {};
+    let result = null;
+    if (raw.result && typeof raw.result === "object" && raw.result.ok === true) {
+      try {
+        const text = JSON.stringify(raw.result);
+        if (text.length <= 250000) {
+          const parsed = JSON.parse(text);
+          if (parsed && parsed.ok === true
+            && typeof parsed.hash === "string" && /^[a-f0-9]{64}$/.test(parsed.hash)
+            && parsed.summary && typeof parsed.summary === "object"
+            && Array.isArray(parsed.sectors) && parsed.sectors.length
+            && parsed.meta && parsed.slope && parsed.dem) {
+            result = parsed;
+          }
+        }
+      } catch (error) {
+        result = null;
+      }
+    }
+    const product = (result && result.dem && result.dem.product === "DSM")
+      || declarationRaw.product === "DSM" ? "DSM" : "DTM";
+    const allowedClasses = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+    const declaration = {
+      sourceId: "byod",
+      name: String(declarationRaw.name || (result && result.dem && result.dem.name) || "DEM propio").slice(0, 80),
+      product,
+      bareEarth: product === "DTM" && declarationRaw.bareEarth !== false,
+      fileName: String(declarationRaw.fileName || (result && result.meta && result.meta.fileName) || "").slice(0, 160),
+      format: String(declarationRaw.format || "").slice(0, 20),
+      license: String(declarationRaw.license || "").slice(0, 160),
+      attribution: String(declarationRaw.attribution || "").slice(0, 160),
+      acquisitionYear: optionalNumber(declarationRaw.acquisitionYear),
+      verticalAccuracyM: optionalNumber(declarationRaw.verticalAccuracyM),
+      officialClass: allowedClasses.includes(declarationRaw.officialClass) ? declarationRaw.officialClass : null,
+      validation: normalizeDemValidation(declarationRaw.validation),
+    };
+    if (!result && !Object.keys(declarationRaw).length) return null;
+    return { declaration, result };
+  }
+
   function normalizeState(raw) {
     if (!raw || typeof raw !== "object") return null;
     const points = Array.isArray(raw.points)
@@ -718,6 +874,7 @@
       repetitions: normalizeRepetitions(raw.repetitions),
       photos: normalizePhotos(raw.photos),
       notes: String(raw.notes || "").slice(0, 1200),
+      dem: normalizeDem(raw.dem),
       updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
     };
   }
@@ -944,6 +1101,7 @@
         caseAreaHa(project).toFixed(4),
         project.lots.length,
         project.photos.length,
+        project.dem && project.dem.result ? project.dem.result.hash.slice(0, 12) : "",
         item.createdAt,
       ].join(":");
     }).join(";");
@@ -964,11 +1122,12 @@
       const meta = vertices
         ? `${vertices >= 3 ? `${fmt(area, 4)} ha` : "Sin superficie"} · ${vertices} ${vertices === 1 ? "vértice" : "vértices"} · ${caseDateLabel(item.createdAt)}`
         : `Sin medición · ${caseDateLabel(item.createdAt)}`;
+      const demTag = project.dem && project.dem.result ? ' <span class="case-dem-tag">DEM</span>' : "";
       return `
         <div class="case-item${active ? " is-active" : ""}"${active ? ' aria-current="true"' : ""}>
           <button class="case-open" type="button" data-case-open="${item.id}" aria-label="Abrir caso ${escapeHtml(project.projectName)}">
             <span class="case-name">${escapeHtml(project.projectName)}</span>
-            <span class="case-meta">${meta}</span>
+            <span class="case-meta">${meta}${demTag}</span>
           </button>
           <span class="case-tag">${active ? "En edición" : "Abrir"}</span>
           <button class="case-delete" type="button" data-case-delete="${item.id}" title="Eliminar caso" aria-label="Eliminar caso ${escapeHtml(project.projectName)}">
@@ -3043,6 +3202,13 @@
       `Método: ${methodLabel()}`,
       reference,
       `Centro: ${formatCoordDms(center.lat, true, 1)} ${formatCoordDms(center.lon, false, 1)} · WGS 84`,
+      ...(state.dem && state.dem.result
+        ? [
+            `Pendiente: media ${demNumber(state.dem.result.slope && state.dem.result.slope.meanPct, 2)} % · P95 ${demNumber(state.dem.result.slope && state.dem.result.slope.p95Pct, 2)} %`,
+            `DEM: ${state.dem.result.dem && state.dem.result.dem.product} · ${demNumber(state.dem.result.meta && state.dem.result.meta.resolutionM, 2)} m · ${state.dem.result.dem && state.dem.result.dem.license}`,
+            `Clase propuesta: ${(state.dem.result.sectors && state.dem.result.sectors[0] && demProposedClass(state.dem.result.sectors[0].class)) || "no determinable"}`,
+          ]
+        : []),
       `Huella: ${payloadHash().slice(0, 16)}…`,
     ].join("\n");
     const kml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -3129,6 +3295,7 @@
         centro_lon: Number(center.lon.toFixed(8)),
         vertices: metrics.n,
         lotes: state.lots.map((lot) => ({ lote: lot.name, cultivo: lot.crop, superficie_ha: lot.areaHa })),
+        pendiente_dem: demExportFields(state.dem && state.dem.result, state.dem && state.dem.declaration),
         precision_gps_media_m: metrics.avgAcc !== null ? Number(metrics.avgAcc.toFixed(2)) : null,
         huella_sha256: payloadHash(),
         fecha: new Date().toISOString(),
@@ -3163,6 +3330,14 @@
     if (state.lots.length) {
       const summed = state.lots.reduce((sum, lot) => sum + lot.areaHa, 0);
       lines.push(`Lotes: ${state.lots.length} · ${fmt(summed, 4)} ha asignadas`);
+    }
+    if (state.dem && state.dem.result) {
+      const result = state.dem.result;
+      const slope = result.slope || {};
+      const cls = (result.sectors && result.sectors[0] && result.sectors[0].class) || {};
+      lines.push(`Pendiente: media ${demNumber(slope.meanPct, 2)} % · P95 ${demNumber(slope.p95Pct, 2)} % · máx ${demNumber(slope.maxPct, 2)} %`);
+      lines.push(`DEM: ${result.dem && result.dem.product} · ${demNumber(result.meta && result.meta.resolutionM, 2)} m · ${result.dem && result.dem.license}`);
+      lines.push(`Clase propuesta: ${demProposedClass(cls) || demStatusLabel(cls.status, cls.statusEs)}${demStaleReason(result, state.dem.declaration) ? " (resultado anterior)" : ""}`);
     }
     lines.push(`Vértices: ${metrics.n}`);
     lines.push(`Método: ${methodLabel()}`);
@@ -3348,7 +3523,12 @@
       </section>
 
       <section class="pr-section">
-        <h2>5. Repeticiones e incertidumbre</h2>
+        <h2>5. Pendiente del terreno</h2>
+        ${buildDemReportBlock()}
+      </section>
+
+      <section class="pr-section">
+        <h2>6. Repeticiones e incertidumbre</h2>
         ${uncertaintyBlock}
         ${state.repetitions.length
           ? `<table class="pr-table pr-table-compact">
@@ -3359,12 +3539,12 @@
       </section>
 
       <section class="pr-section">
-        <h2>6. Registro fotográfico</h2>
+        <h2>7. Registro fotográfico</h2>
         ${state.photos.length ? `<div class="pr-photos">${photoCards}</div>` : '<p class="pr-note">Sin fotografías adjuntas.</p>'}
       </section>
 
       <section class="pr-section">
-        <h2>7. Observaciones</h2>
+        <h2>8. Observaciones</h2>
         <p class="pr-notes">${notes}</p>
       </section>
 
@@ -3961,6 +4141,731 @@
     releaseWakeLock();
   }
 
+  /* ---------- Pendiente del terreno (BYOD) ---------- */
+
+  function demSignature(points) {
+    return (Array.isArray(points) ? points : [])
+      .map((point) => `${(+point.lat).toFixed(6)},${(+point.lon).toFixed(6)}`)
+      .join("|");
+  }
+
+  function resultPointsSignature(result) {
+    const points = result && result.summary && Array.isArray(result.summary.points)
+      ? result.summary.points
+      : [];
+    return points.map((point) => {
+      if (Array.isArray(point)) return `${(+point[0]).toFixed(6)},${(+point[1]).toFixed(6)}`;
+      return `${(+point.lat).toFixed(6)},${(+point.lon).toFixed(6)}`;
+    }).join("|");
+  }
+
+  function demNumber(value, digits) {
+    return Number.isFinite(+value) ? fmt(+value, digits) : "—";
+  }
+
+  function demStatusLabel(status, statusEs) {
+    const direct = String(statusEs || "").toLowerCase();
+    const api = String(status || "").toLowerCase();
+    return DEM_STATUS_LABELS[direct] || DEM_STATUS_LABELS[api] || statusEs || status || "sin estado";
+  }
+
+  function demValidationLabel(validation) {
+    if (!validation) return "No validado";
+    const key = String(validation.status || "").toLowerCase();
+    return DEM_VALIDATION_LABELS[key] || DEM_VALIDATION_LABELS[String(validation.statusEs || "").toLowerCase()] || "No validado";
+  }
+
+  function demProposedClass(cls) {
+    return (cls && (cls.proposedClass || cls.finalClass)) || null;
+  }
+
+  function demClassPercent(slope, bandId) {
+    if (!slope) return 0;
+    const share = slope.classShare ? +slope.classShare[bandId] : NaN;
+    if (Number.isFinite(share)) return clamp(share * 100, 0, 100);
+    const pct = slope.classesPct ? +slope.classesPct[bandId] : NaN;
+    return Number.isFinite(pct) ? clamp(pct, 0, 100) : 0;
+  }
+
+  function demEffectiveBaseline(meta) {
+    if (!meta) return null;
+    const baseline = +meta.effectiveBaselineM;
+    if (Number.isFinite(baseline) && baseline > 0) return baseline;
+    const legacy = +meta.effectiveWindowM;
+    if (Number.isFinite(legacy) && legacy > 0) return legacy;
+    return null;
+  }
+
+  function setDemStatus(kind, text) {
+    if (!el.demStatus) return;
+    el.demStatus.className = `dem-status${kind ? ` is-${kind}` : ""}`;
+    setText(el.demStatusText, text);
+  }
+
+  function setDemError(text) {
+    if (!el.demError) return;
+    el.demError.textContent = text || "";
+    el.demError.hidden = !text;
+  }
+
+  function updateDemBareEarth() {
+    const isDsm = el.demProduct.value === "DSM";
+    if (isDsm) {
+      el.demBareEarth.checked = false;
+      el.demBareEarth.disabled = true;
+    } else {
+      el.demBareEarth.disabled = false;
+    }
+  }
+
+  function updateDemAnalyzeState() {
+    if (!el.demAnalyze) return;
+    const hasPolygon = state.points.length >= 3;
+    el.demAnalyze.disabled = demBusy || !hasPolygon || !demSelectedFile;
+    el.demClear.disabled = demBusy || (!state.dem && !demSelectedFile);
+    let label = "Calcular pendiente";
+    if (demBusy) label = "Calculando…";
+    else if (!hasPolygon) label = "Dibuja el predio primero";
+    else if (!demSelectedFile) {
+      label = state.dem && state.dem.result
+        ? "Carga el DEM para recalcular"
+        : "Carga un DEM para calcular";
+    }
+    setText(el.demAnalyzeText, label);
+  }
+
+  function refreshDemState() {
+    if (!el.demStatus) return;
+    updateDemAnalyzeState();
+    const dem = state.dem;
+    const result = dem && dem.result ? dem.result : null;
+    if (!result) {
+      setDemStatus("empty", "Sin DEM");
+      setText(el.demSubtitle, "Modelo propio (BYOD) · cálculo en tu dispositivo");
+      if (el.demStaleNote) el.demStaleNote.hidden = true;
+      return;
+    }
+    const meta = result.meta || {};
+    const product = result.dem && result.dem.product === "DSM" ? "DSM" : "DTM";
+    setText(el.demSubtitle, `${(dem.declaration && dem.declaration.name) || "DEM propio"} · ${product} · ${demNumber(meta.resolutionM, 1)} m`);
+
+    const stalePoints = resultPointsSignature(result) !== demSignature(state.points);
+    const resultClass = result.sectors && result.sectors[0] && result.sectors[0].class
+      ? result.sectors[0].class.officialClass
+      : null;
+    const currentClass = el.demOfficialClass.value || null;
+    const staleClass = (resultClass || null) !== currentClass;
+    if (stalePoints || staleClass || demFormDirty) {
+      setDemStatus("warn", "Sin recalcular");
+      if (el.demStaleNote) {
+        el.demStaleNote.hidden = false;
+        el.demStaleNote.textContent = stalePoints
+          ? "El croquis cambió después del cálculo. Vuelve a cargar el DEM y calcula de nuevo."
+          : staleClass
+            ? "La clase oficial cambió después del cálculo. Vuelve a calcular para actualizar la propuesta."
+            : "Cambiaste la declaración del DEM. Vuelve a calcular para actualizar el resultado.";
+      }
+      return;
+    }
+    if (el.demStaleNote) el.demStaleNote.hidden = true;
+    if (product === "DSM") setDemStatus("warn", "DSM · no apto");
+    else if (result.validation && result.validation.ok) setDemStatus("ok", "Validado (declarado)");
+    else setDemStatus("warn", "No validado");
+  }
+
+  function markDemDirty() {
+    updateDemBareEarth();
+    if (state.dem && state.dem.result) demFormDirty = true;
+    refreshDemState();
+  }
+
+  function setDemBusy(busy) {
+    demBusy = busy;
+    if (el.demProgress) el.demProgress.hidden = !busy;
+    if (busy) {
+      if (el.demProgressBar) el.demProgressBar.style.width = "2%";
+      setText(el.demProgressText, "Preparando…");
+      setDemStatus("busy", "Calculando…");
+    }
+    updateDemAnalyzeState();
+    if (!busy) refreshDemState();
+  }
+
+  function renderDemEmpty() {
+    if (!el.demResults) return;
+    el.demEmpty.hidden = false;
+    el.demResultBody.hidden = true;
+    setText(el.demHash, "—");
+    el.demHash.title = "";
+  }
+
+  function renderDemResult(result) {
+    if (!el.demResults) return;
+    el.demEmpty.hidden = true;
+    el.demResultBody.hidden = false;
+
+    const meta = result.meta || {};
+    const dem = result.dem || {};
+    const slope = result.slope || {};
+    const sector = result.sectors && result.sectors[0] ? result.sectors[0] : {};
+    const cls = sector.class || {};
+    const validation = result.validation || {};
+    const isDsm = dem.product === "DSM";
+
+    setText(el.demResultBadge, `DEM propio · ${isDsm ? "DSM" : "DTM"}`);
+    setText(el.demResultResolution, `${demNumber(meta.resolutionM, 1)} m · ${fmtInt(meta.validCells || 0)} celdas`);
+
+    el.demValidationBadge.className = "dem-validation-badge"
+      + (isDsm ? " is-danger" : validation.ok ? " is-ok" : "");
+    setText(el.demValidationBadge, isDsm
+      ? "No apto para clase"
+      : validation.ok ? "Validado (declarado)" : "No validado");
+
+    const sourceBits = [
+      dem.name || "DEM propio",
+      dem.acquisitionYear ? String(dem.acquisitionYear) : "año no declarado",
+      dem.license || "licencia no declarada",
+    ];
+    setText(el.demResultSource, sourceBits.join(" · "));
+
+    setText(el.demMean, demNumber(slope.meanPct, 2));
+    setText(el.demP95, demNumber(slope.p95Pct, 2));
+    setText(el.demMax, demNumber(slope.maxPct, 2));
+
+    el.demBars.innerHTML = DEM_BANDS.map((band) => {
+      const value = demClassPercent(slope, band.id);
+      const width = clamp(value, 0, 100);
+      return `<div class="dem-bar ${band.tone}"><span>${band.label}</span><i><b style="width:${width.toFixed(1)}%"></b></i><em>${fmt(value, 1)} %</em></div>`;
+    }).join("");
+
+    setText(el.demOfficial, cls.officialClass || "Sin carta");
+    setText(el.demSlopeClass, cls.slopeClass || "—");
+    setText(el.demFinalClass, demProposedClass(cls) || demStatusLabel(cls.status, cls.statusEs));
+    const statusLabel = demStatusLabel(cls.status, cls.statusEs);
+    const note = isDsm
+      ? "No apto: un DSM incluye vegetación y edificaciones. Solo se informa la pendiente de superficie."
+      : `${statusLabel} · ${cls.limitingFactor || "sin limitante topográfica"} · base: ${cls.basis || "pendiente P95"}.`;
+    setText(el.demClassNote, note);
+
+    const baseline = demEffectiveBaseline(meta);
+    const rows = [
+      ["Resolución", `${demNumber(meta.resolutionM, 1)} m`],
+      ["Ventana", `${demNumber(meta.windowM, 0)} m${baseline !== null ? ` (soporte ${demNumber(baseline, 1)} m)` : ""}`],
+      ["Incertidumbre", slope.uncertaintyPct !== null && slope.uncertaintyPct !== undefined ? `± ${demNumber(slope.uncertaintyPct, 2)} %` : "—"],
+      ["Área de celdas", `${demNumber(meta.areaHa, 4)} ha`],
+      ["Cobertura", Number.isFinite(+meta.coverage) ? `${demNumber(+meta.coverage * 100, 1)} %` : "—"],
+      ["Celdas válidas", `${fmtInt(meta.validCells || 0)} / ${fmtInt(meta.cells || 0)}`],
+      ["Sin pendiente", `${demNumber(meta.nodataPct, 1)} %`],
+      ["Validación", `${demValidationLabel(validation)}${validation.n ? ` · n = ${fmtInt(validation.n)}` : ""}`],
+      ["Calculado", result.computedAt ? formatDateTime(result.computedAt) : "—"],
+    ];
+    el.demMeta.innerHTML = rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("");
+
+    const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+    el.demWarnings.innerHTML = warnings.map((text) => `<li>${escapeHtml(text)}</li>`).join("");
+
+    setText(el.demHash, shortHash(result.hash));
+    el.demHash.title = result.hash ? `SHA-256 del resultado DEM: ${result.hash}` : "";
+  }
+
+  function demSummaryText(result) {
+    if (!result) return "";
+    const dem = result.dem || {};
+    const slope = result.slope || {};
+    const sector = result.sectors && result.sectors[0] ? result.sectors[0] : {};
+    const cls = sector.class || {};
+    const validation = result.validation || {};
+    const bands = DEM_BANDS
+      .filter((band) => demClassPercent(slope, band.id) > 0)
+      .map((band) => `${band.label}: ${fmt(demClassPercent(slope, band.id), 1)} %`)
+      .join(" · ");
+    const baseline = demEffectiveBaseline(result.meta);
+    return [
+      "CAMPO VERDE JRB · Pendiente del terreno",
+      `Predio: ${state.projectName || "Predio sin nombre"}`,
+      `DEM: ${dem.name || "DEM propio"} · ${dem.product} · ${demNumber(result.meta && result.meta.resolutionM, 1)} m · ${dem.acquisitionYear || "año no declarado"}`,
+      `Licencia: ${dem.license || "no declarada"}`,
+      `Validación: ${demValidationLabel(validation)}${validation.n ? ` (n = ${validation.n})` : ""}`,
+      `Pendiente: media ${demNumber(slope.meanPct, 2)} % · P95 ${demNumber(slope.p95Pct, 2)} % · máx ${demNumber(slope.maxPct, 2)} %`,
+      bands ? `Distribución: ${bands}` : "Distribución: sin datos",
+      `Clase oficial: ${cls.officialClass || "sin carta"} · propuesta: ${demProposedClass(cls) || demStatusLabel(cls.status, cls.statusEs)} (${demStatusLabel(cls.status, cls.statusEs)})`,
+      `Ventana: ${demNumber(result.meta && result.meta.windowM, 0)} m${baseline !== null ? ` · base ${demNumber(baseline, 1)} m` : ""} · incertidumbre ± ${demNumber(slope.uncertaintyPct, 2)} %`,
+      `Huella SHA-256: ${result.resultHash || result.hash}`,
+      "La pendiente no reemplaza la carta de suelos ni la firma de un profesional.",
+    ].join("\n");
+  }
+
+  function demStaleReason(result, declaration) {
+    if (!result) return "";
+    if (resultPointsSignature(result) !== demSignature(state.points)) {
+      return "El croquis cambió después del cálculo: este resultado corresponde al polígono anterior. Vuelve a cargar el DEM y recalcula.";
+    }
+    const resultClass = result.sectors && result.sectors[0] && result.sectors[0].class
+      ? result.sectors[0].class.officialClass || null
+      : null;
+    const currentClass = declaration ? declaration.officialClass || null : null;
+    if (resultClass !== currentClass) {
+      return "La clase oficial cambió después del cálculo: este resultado corresponde a la clase anterior. Recalcula para actualizarlo.";
+    }
+    return "";
+  }
+
+  function demExportFields(result, declaration) {
+    if (!result) return null;
+    const meta = result.meta || {};
+    const dem = result.dem || {};
+    const slope = result.slope || {};
+    const sector = result.sectors && result.sectors[0] ? result.sectors[0] : {};
+    const cls = sector.class || {};
+    const validation = result.validation || {};
+    return {
+      producto: dem.product || null,
+      fuente: dem.name || null,
+      archivo: meta.fileName || null,
+      resolucion_m: meta.resolutionM ?? null,
+      error_vertical_le90_m: dem.verticalAccuracyM ?? null,
+      anio_captura: dem.acquisitionYear ?? null,
+      licencia: dem.license || null,
+      atribucion: dem.attribution || null,
+      metodo_dem: dem.method || null,
+      ventana_m: meta.windowM ?? null,
+      base_efectiva_m: demEffectiveBaseline(meta),
+      cobertura: meta.coverage ?? null,
+      incertidumbre_pct: slope.uncertaintyPct ?? null,
+      pendiente_media_pct: slope.meanPct ?? null,
+      pendiente_p95_pct: slope.p95Pct ?? null,
+      pendiente_max_pct: slope.maxPct ?? null,
+      celdas_validas: meta.validCells ?? null,
+      celdas_brutas: meta.cells ?? null,
+      celdas_minimas: sector.class && sector.class.minCells ? sector.class.minCells : 100,
+      validacion_estado: validation.status || "not_validated",
+      validacion_estado_es: demValidationLabel(validation),
+      validacion_n: validation.n || 0,
+      clase_oficial: cls.officialClass || null,
+      clase_pendiente: cls.slopeClass || null,
+      clase_propuesta: demProposedClass(cls),
+      clase_estado: cls.status || null,
+      clase_estado_es: demStatusLabel(cls.status, cls.statusEs),
+      clase_confirmada: cls.status === "confirmed",
+      resultado_obsoleto: Boolean(demStaleReason(result, declaration)),
+      huella_dem_sha256: result.hash || null,
+      huella_dem_result_hash: result.resultHash || null,
+      id_resultado_dem: result.resultId || null,
+    };
+  }
+
+  function buildDemReportBlock() {
+    const record = state.dem;
+    const result = record && record.result ? record.result : null;
+    if (!result) {
+      return '<p class="pr-note">Sin análisis de pendiente para este caso. La clase agrológica no se determinó.</p>';
+    }
+    const declaration = record.declaration || {};
+    const meta = result.meta || {};
+    const dem = result.dem || {};
+    const slope = result.slope || {};
+    const sector = result.sectors && result.sectors[0] ? result.sectors[0] : {};
+    const cls = sector.class || {};
+    const validation = result.validation || {};
+    const stale = demStaleReason(result, declaration);
+    const official = cls.officialClass || "sin carta de suelos";
+    const statusLabel = demStatusLabel(cls.status, cls.statusEs);
+    const baseline = demEffectiveBaseline(meta);
+    const bands = DEM_BANDS
+      .map((band) => `${band.label}: ${fmt(demClassPercent(slope, band.id), 1)} %`)
+      .join(" · ");
+    const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+    const declared = [
+      dem.name || "sin fuente declarada",
+      `${dem.product || "producto no declarado"}`,
+      `${demNumber(meta.resolutionM, 2)} m de resolución`,
+      dem.verticalAccuracyM === null || dem.verticalAccuracyM === undefined
+        ? "error vertical no declarado"
+        : `LE90 ${demNumber(dem.verticalAccuracyM, 2)} m`,
+      dem.acquisitionYear ? `año ${dem.acquisitionYear}` : "año no declarado",
+      dem.license || "licencia no declarada",
+      dem.attribution || "atribución no declarada",
+    ].join(" · ");
+
+    return `
+      ${stale ? `<p class="pr-alert">${escapeHtml(stale)}</p>` : ""}
+      <p class="pr-note">${escapeHtml(declared)}</p>
+      <table class="pr-table pr-table-compact">
+        <thead><tr><th>Producto</th><th>Resolución</th><th>Error vertical (LE90)</th><th>Año</th><th>Licencia</th></tr></thead>
+        <tbody><tr>
+          <td>${escapeHtml(dem.product || "—")}</td>
+          <td>${demNumber(meta.resolutionM, 2)} m</td>
+          <td>${dem.verticalAccuracyM === null || dem.verticalAccuracyM === undefined ? "no declarado" : `${demNumber(dem.verticalAccuracyM, 2)} m`}</td>
+          <td>${dem.acquisitionYear || "no declarado"}</td>
+          <td>${escapeHtml(dem.license || "no declarada")}</td>
+        </tr></tbody>
+      </table>
+      <table class="pr-table pr-table-compact">
+        <thead><tr><th>Pendiente media</th><th>P95</th><th>Máxima</th><th>Ventana</th><th>Base efectiva</th><th>Incertidumbre</th><th>Celdas válidas</th></tr></thead>
+        <tbody><tr>
+          <td>${demNumber(slope.meanPct, 2)} %</td>
+          <td>${demNumber(slope.p95Pct, 2)} %</td>
+          <td>${demNumber(slope.maxPct, 2)} %</td>
+          <td>${demNumber(meta.windowM, 0)} m</td>
+          <td>${baseline !== null ? `${demNumber(baseline, 1)} m` : "—"}</td>
+          <td>${slope.uncertaintyPct === null || slope.uncertaintyPct === undefined ? "—" : `± ${demNumber(slope.uncertaintyPct, 2)} %`}</td>
+          <td>${fmtInt(meta.validCells || 0)} / ${fmtInt(meta.cells || 0)}</td>
+        </tr></tbody>
+      </table>
+      <p class="pr-footnote">Distribución por rango: ${escapeHtml(bands)}.</p>
+      <table class="pr-table pr-table-compact">
+        <thead><tr><th>Clase oficial</th><th>Clase por pendiente</th><th>Clase propuesta</th><th>Estado</th><th>Validación</th></tr></thead>
+        <tbody><tr>
+          <td>${escapeHtml(official)}</td>
+          <td>${escapeHtml(cls.slopeClass || "—")}</td>
+          <td>${escapeHtml(demProposedClass(cls) || statusLabel)}</td>
+          <td>${escapeHtml(statusLabel)}</td>
+          <td>${escapeHtml(demValidationLabel(validation))}${validation.n ? ` · n = ${fmtInt(validation.n)}` : ""}</td>
+        </tr></tbody>
+      </table>
+      ${warnings.length ? `<ul class="pr-dem-warnings">${warnings.map((text) => `<li>${escapeHtml(text)}</li>`).join("")}</ul>` : ""}
+      <p class="pr-footnote">La clase oficial IGAC/UPRA es la base; la pendiente solo puede empeorarla. La app no certifica la clase: la propuesta queda sujeta a la carta de suelos y a revisión profesional. ${
+        cls.canConfirm ? "" : "Ningún resultado se marca como confirmado."
+      }</p>
+      <p class="pr-hash"><strong>Huella SHA-256 del análisis DEM:</strong> ${escapeHtml(result.resultHash || result.hash || "—")}</p>`;
+  }
+
+  function applyDemToUI() {
+    if (!el.demPanel) return;
+    demRequestId += 1;
+    if (demWorker) {
+      demWorker.terminate();
+      demWorker = null;
+    }
+    demBusy = false;
+    if (el.demProgress) el.demProgress.hidden = true;
+
+    const dem = state.dem;
+    const declaration = dem && dem.declaration ? dem.declaration : null;
+    const result = dem && dem.result ? dem.result : null;
+    const validation = declaration && declaration.validation ? declaration.validation : {};
+
+    el.demProduct.value = declaration && declaration.product === "DSM" ? "DSM" : "DTM";
+    el.demAccuracy.value = declaration && Number.isFinite(declaration.verticalAccuracyM) ? fmt(declaration.verticalAccuracyM, 2) : "";
+    el.demSource.value = declaration && declaration.name && declaration.name !== "DEM propio" ? declaration.name : "";
+    el.demYear.value = declaration && declaration.acquisitionYear ? String(declaration.acquisitionYear) : "";
+    el.demLicense.value = declaration ? declaration.license || "" : "";
+    el.demOfficialClass.value = declaration && declaration.officialClass
+      ? declaration.officialClass
+      : (result && result.sectors && result.sectors[0] && result.sectors[0].class
+        ? result.sectors[0].class.officialClass || ""
+        : "");
+    el.demValidationSource.value = validation.source || "";
+    el.demValidationN.value = validation.n ? String(validation.n) : "";
+    el.demValidationBias.value = Number.isFinite(validation.biasM) ? fmt(validation.biasM, 2) : "";
+    el.demValidationRmse.value = Number.isFinite(validation.rmseM) ? fmt(validation.rmseM, 2) : "";
+    updateDemBareEarth();
+
+    demSelectedFile = null;
+    el.demFile.value = "";
+    el.demDrop.classList.remove("is-set");
+    if (result) {
+      setText(el.demDropTitle, "Recalcular con otro DEM");
+      setText(el.demDropText, "El archivo no se guarda: vuelve a cargarlo");
+      setText(el.demFileInfo, `${(result.meta && result.meta.fileName) || "DEM"} · resultado guardado sin el archivo`);
+      renderDemResult(result);
+    } else {
+      setText(el.demDropTitle, "Elegir archivo DEM");
+      setText(el.demDropText, ".asc, .tif o .tiff · máx. 80 MB");
+      setText(el.demFileInfo, "El DEM debe cubrir todo el predio. Límite: 16 millones de celdas.");
+      renderDemEmpty();
+    }
+    setDemError("");
+    demFormDirty = false;
+    refreshDemState();
+  }
+
+  function formatFileSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "—";
+    if (bytes < 1024 * 1024) return `${fmt(bytes / 1024, 0)} KB`;
+    return `${fmt(bytes / (1024 * 1024), 1)} MB`;
+  }
+
+  function setDemFile(file) {
+    setDemError("");
+    if (!file) return;
+    const name = String(file.name || "");
+    if (!/\.(asc|txt|tif|tiff)$/i.test(name)) {
+      setDemError("Formato no soportado. Usa .asc, .tif o .tiff.");
+      return;
+    }
+    if (!file.size) {
+      setDemError("El archivo está vacío.");
+      return;
+    }
+    if (file.size > DEM_MAX_BYTES) {
+      setDemError(`El archivo pesa ${formatFileSize(file.size)}; el límite es 80 MB. Recorta la zona o usa una resolución mayor.`);
+      return;
+    }
+    demSelectedFile = file;
+    el.demDrop.classList.add("is-set");
+    setText(el.demDropTitle, name);
+    setText(el.demDropText, `${formatFileSize(file.size)} · listo para calcular`);
+    setText(el.demFileInfo, "El archivo se lee en este dispositivo y no se guarda. Debe cubrir todo el predio.");
+    refreshDemState();
+  }
+
+  async function clearDem() {
+    if (!state.dem && !demSelectedFile) return;
+    if (state.dem && state.dem.result) {
+      const ok = await askConfirm(
+        "Quitar DEM del caso",
+        "Se eliminará el resultado de pendiente guardado en este caso. El archivo DEM nunca se guardó en la app. ¿Continuar?",
+        "Quitar DEM"
+      );
+      if (!ok) return;
+    }
+    demRequestId += 1;
+    if (demWorker) {
+      demWorker.terminate();
+      demWorker = null;
+    }
+    state.dem = null;
+    demSelectedFile = null;
+    el.demFile.value = "";
+    el.demDrop.classList.remove("is-set");
+    el.demAccuracy.value = "";
+    el.demSource.value = "";
+    el.demYear.value = "";
+    el.demLicense.value = "";
+    el.demOfficialClass.value = "";
+    el.demProduct.value = "DTM";
+    el.demBareEarth.checked = true;
+    el.demValidationSource.value = "";
+    el.demValidationN.value = "";
+    el.demValidationBias.value = "";
+    el.demValidationRmse.value = "";
+    updateDemBareEarth();
+    demFormDirty = false;
+    setDemBusy(false);
+    setDemError("");
+    renderDemEmpty();
+    refreshDemState();
+    persistState();
+    showToast("DEM quitado del caso. El archivo nunca se guardó.");
+  }
+
+  async function analyzeDem() {
+    setDemError("");
+    if (state.points.length < 3) {
+      setDemError("Dibuja el predio con al menos 3 vértices antes de calcular la pendiente.");
+      return;
+    }
+    if (!demSelectedFile) {
+      setDemError("Elige un archivo .asc, .tif o .tiff.");
+      return;
+    }
+    const product = el.demProduct.value === "DSM" ? "DSM" : "DTM";
+    const bareEarth = product === "DTM" && el.demBareEarth.checked;
+    if (product === "DTM" && !bareEarth) {
+      setDemError("Para calcular con DTM debes declarar que es suelo desnudo, o cambiar el producto a DSM.");
+      return;
+    }
+    const source = el.demSource.value.trim();
+    const license = el.demLicense.value.trim();
+    if (!source) {
+      setDemError("Indica la fuente del DEM (IGAC LiDAR, vuelo propio, proveedor…).");
+      el.demSource.focus();
+      return;
+    }
+    if (!license) {
+      setDemError("Indica la licencia o autorización del DEM.");
+      el.demLicense.focus();
+      return;
+    }
+
+    const accuracyText = el.demAccuracy.value.trim();
+    const accuracy = accuracyText ? parseDecimal(accuracyText) : null;
+    if (accuracyText && (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100)) {
+      setDemError("El error vertical LE90 debe ser un número mayor que 0 y menor que 100 m.");
+      return;
+    }
+    const yearText = el.demYear.value.trim();
+    const year = yearText ? parseDecimal(yearText) : null;
+    if (yearText && (!Number.isFinite(year) || year < 1900 || year > new Date().getFullYear() + 1)) {
+      setDemError("El año de captura no es válido.");
+      return;
+    }
+    const validationSource = el.demValidationSource.value;
+    const nText = el.demValidationN.value.trim();
+    const n = nText ? parseDecimal(nText) : 0;
+    if (nText && (!Number.isFinite(n) || n <= 0 || Math.floor(n) !== n)) {
+      setDemError("El número de huellas de validación debe ser un entero mayor que 0.");
+      return;
+    }
+    const biasText = el.demValidationBias.value.trim();
+    const bias = biasText ? parseDecimal(biasText) : null;
+    if (biasText && !Number.isFinite(bias)) {
+      setDemError("El sesgo de validación debe ser un número en metros.");
+      return;
+    }
+    const rmseText = el.demValidationRmse.value.trim();
+    const rmse = rmseText ? parseDecimal(rmseText) : null;
+    if (rmseText && (!Number.isFinite(rmse) || rmse < 0)) {
+      setDemError("El RMSE de validación debe ser un número mayor o igual que 0.");
+      return;
+    }
+    const officialClass = el.demOfficialClass.value || null;
+    const validation = {
+      source: validationSource,
+      n: Number.isFinite(n) ? Math.trunc(n) : 0,
+      biasM: bias,
+      rmseM: rmse,
+      status: validationSource && n > 0 && bias !== null ? "validado" : "pendiente",
+      date: new Date().toISOString(),
+      declared: true,
+    };
+    const declaration = {
+      sourceId: "byod",
+      name: source,
+      product,
+      bareEarth,
+      fileName: demSelectedFile.name,
+      format: /\.(asc|txt)$/i.test(demSelectedFile.name) ? "ASC" : "GeoTIFF",
+      license,
+      attribution: source,
+      acquisitionYear: year,
+      verticalAccuracyM: accuracy,
+      officialClass,
+      validation,
+    };
+
+    if (demWorker) {
+      demWorker.terminate();
+      demWorker = null;
+    }
+    const requestId = ++demRequestId;
+    let buffer;
+    try {
+      buffer = await demSelectedFile.arrayBuffer();
+    } catch (error) {
+      setDemError("No se pudo leer el archivo. Vuelve a seleccionarlo.");
+      return;
+    }
+    if (buffer.byteLength > DEM_MAX_BYTES) {
+      setDemError("El archivo supera el límite de 80 MB.");
+      return;
+    }
+
+    let worker;
+    try {
+      worker = new Worker("dem/dem-worker.js?v=1.4.0");
+    } catch (error) {
+      setDemError("Este navegador no pudo iniciar el cálculo. Abre la app desde HTTPS o localhost, no como archivo local.");
+      return;
+    }
+    demWorker = worker;
+    setDemBusy(true);
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (demWorker === worker) demWorker = null;
+      worker.terminate();
+      setDemBusy(false);
+    };
+    const fail = (message) => {
+      if (settled) return;
+      setDemError(message || "No se pudo procesar el DEM.");
+      setDemStatus("error", "Error");
+      finish();
+    };
+
+    worker.onmessage = (event) => {
+      const message = event.data || {};
+      if (message.id !== requestId || requestId !== demRequestId) return;
+      if (message.type === "progress") {
+        const pct = clamp(Number(message.pct) || 0, 0, 100);
+        if (el.demProgressBar) el.demProgressBar.style.width = `${pct}%`;
+        setText(el.demProgressText, message.message || "Calculando…");
+        return;
+      }
+      if (message.type === "error") {
+        fail(message.error && message.error.message);
+        return;
+      }
+      if (message.type === "result" && message.result) {
+        const result = message.result;
+        state.dem = { declaration, result };
+        demFormDirty = false;
+        renderDemResult(result);
+        refreshDemState();
+        finish();
+        persistState();
+        showToast(`Pendiente calculada: media ${demNumber(result.slope && result.slope.meanPct, 2)} %, P95 ${demNumber(result.slope && result.slope.p95Pct, 2)} %.`, 4600);
+      }
+    };
+    worker.onerror = () => {
+      fail("No se pudo leer el DEM. El archivo puede estar dañado o usar una variante no soportada.");
+    };
+
+    try {
+      worker.postMessage({
+        type: "analyze",
+        id: requestId,
+        file: { name: demSelectedFile.name, buffer },
+        polygon: state.points.map((point) => ({ lat: point.lat, lon: point.lon })),
+        dem: declaration,
+        officialClass,
+        options: { minCells: 100, targetPct: 7 },
+      }, [buffer]);
+    } catch (error) {
+      fail("No se pudo enviar el archivo al calculador. Inténtalo de nuevo.");
+    }
+  }
+
+  function initDem() {
+    if (!el.demPanel) return;
+    el.demFile.addEventListener("change", () => {
+      const file = el.demFile.files && el.demFile.files[0];
+      if (file) setDemFile(file);
+    });
+    el.demAnalyze.addEventListener("click", analyzeDem);
+    el.demClear.addEventListener("click", clearDem);
+    el.demProduct.addEventListener("change", markDemDirty);
+    [
+      "demAccuracy", "demSource", "demYear", "demLicense", "demOfficialClass",
+      "demBareEarth", "demValidationSource", "demValidationN",
+      "demValidationBias", "demValidationRmse",
+    ].forEach((key) => {
+      const node = el[key];
+      if (!node) return;
+      node.addEventListener("input", markDemDirty);
+      node.addEventListener("change", markDemDirty);
+    });
+    el.demCopy.addEventListener("click", async () => {
+      const result = state.dem && state.dem.result;
+      if (!result) {
+        showToast("Todavía no hay un resultado DEM para copiar.");
+        return;
+      }
+      const copied = await copyText(demSummaryText(result));
+      showToast(copied ? "Resumen de pendiente copiado." : "No se pudo copiar el resumen.");
+    });
+    ["dragenter", "dragover"].forEach((type) => {
+      el.demDrop.addEventListener(type, (event) => {
+        event.preventDefault();
+        el.demDrop.classList.add("is-set");
+      });
+    });
+    ["dragleave", "drop"].forEach((type) => {
+      el.demDrop.addEventListener(type, (event) => {
+        event.preventDefault();
+        if (type === "dragleave") el.demDrop.classList.remove("is-set");
+      });
+    });
+    el.demDrop.addEventListener("drop", (event) => {
+      const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) setDemFile(file);
+    });
+  }
+
   function applyStateToUI() {
     el.projectName.value = state.projectName;
     el.refArea.value = state.refAreaHa ? fmt(state.refAreaHa, 4) : "";
@@ -3986,6 +4891,7 @@
     renderPhotos();
     render();
     updateShapePreview();
+    applyDemToUI();
     renderCases(true);
   }
 
@@ -4233,7 +5139,8 @@
 
   async function newMeasurement() {
     const hasContent = state.points.length || state.lots.length || state.photos.length
-      || state.repetitions.length || state.refAreaHa || state.notes || state.projectName !== "Predio sin nombre";
+      || state.repetitions.length || state.refAreaHa || state.notes || state.dem
+      || state.projectName !== "Predio sin nombre";
     if (!hasContent && !gps.active && !gps.paused) {
       showToast("El caso actual ya está vacío. Elige un método para empezar.");
       return;
@@ -4332,6 +5239,7 @@
     initShapesPanel();
     initCoordsPanel();
     initSidesPanel();
+    initDem();
     initCases();
     initInstall();
     initServiceWorker();
@@ -4354,6 +5262,7 @@
 
     renderLots();
     renderPhotos();
+    applyDemToUI();
     view.autoFit = true;
     render();
     renderCases(true);
