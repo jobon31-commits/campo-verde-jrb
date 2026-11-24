@@ -52,11 +52,14 @@
       }
       return block;
     }
+    const isIgac = /^igac-/i.test(String(dem.sourceId || ""))
+      || /IGAC/i.test(String(dem.attribution || ""))
+      || /IGAC/i.test(String(dem.license || ""));
     return {
-      licenseId: "byod-user-declared",
-      holder: dem.attribution || "Usuario BYOD",
-      type: "byod",
-      redistribution: false,
+      licenseId: isIgac ? "igac-open-data" : "byod-user-declared",
+      holder: isIgac ? "Instituto Geográfico Agustín Codazzi (IGAC)" : (dem.attribution || "Usuario BYOD"),
+      type: isIgac ? "open" : "byod",
+      redistribution: isIgac ? true : false,
       attribution: dem.attribution || dem.license || "No declarada",
       declared: dem.license || "No declarada",
     };

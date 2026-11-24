@@ -107,6 +107,23 @@ La resolución no es precisión. `resolutionM` describe el paso de la grilla;
 No se habilitan free30 ni pro5. No se redistribuye el DEM. Si falta la licencia,
 `contractComplete` es `false`; no se rellena con una licencia inventada.
 
+## Cobertura automática IGAC
+
+`dem/igac.js` consulta `dem/igac-index.json`, elige la tesela pública del IGAC
+que cubra todo el polígono y construye una solicitud `exportImage` en EPSG:4326.
+El GeoTIFF se descarga al teléfono y pasa por el mismo núcleo de cálculo.
+
+- Fuente: `sourceId` del ítem IGAC (`igac-…`), `meta.license.type = "open"`,
+  `licenseId = "igac-open-data"`, atribución IGAC y `redistribution: true`.
+- El índice no declara LE90 por tesela: `verticalAccuracyM` queda `null` hasta
+  consultar la ficha técnica. Sin LE90 no se puede validar la clase.
+- La cobertura es municipal o parcial (“cabecera municipal” / “centro poblado”);
+  la app avisa y exige que la tesela cubra todo el polígono.
+- La validación GEDI/ICESat-2 no viene incluida; si el usuario no la aporta, el
+  resultado queda `not_validated`.
+- Esta vía no cambia el contrato `/slope`: el resultado sigue siendo un DTM
+  BYOD/IGAC con la misma estructura y hash.
+
 ## Hash
 
 - `resultHash = "sha256:" + sha256(canonicalJson({ summary, declaration }))`.

@@ -22,7 +22,7 @@
 
   if (!core) throw new Error("CVDemCompute necesita dem-core.js.");
 
-  const COMPUTE_VERSION = "0.3.0";
+  const COMPUTE_VERSION = "0.4.0";
   const EARTH_R = 6371008.8;
   const EARTH_M_PER_DEG = 111195.0802335329;
   const DEG = Math.PI / 180;
@@ -1027,6 +1027,9 @@
       format: dem.format || (grid.meta && grid.meta.format) || null,
       license: dem.license || null,
       attribution: dem.attribution || null,
+      sourceUrl: dem.sourceUrl || null,
+      sourceTitle: dem.sourceTitle || null,
+      sourceCoverage: dem.sourceCoverage || null,
       product: dem.product || null,
       bareEarth: dem.bareEarth === true,
       verticalAccuracyM: dem.verticalAccuracyM ?? null,
@@ -1125,6 +1128,9 @@
         method: dem.method || "No declarado",
         license: dem.license || "No declarada",
         attribution: dem.attribution || "No declarada",
+        sourceUrl: dem.sourceUrl || null,
+        sourceTitle: dem.sourceTitle || null,
+        sourceCoverage: dem.sourceCoverage || null,
         commercialUse: dem.commercialUse ?? null,
         licenseInfo,
       },

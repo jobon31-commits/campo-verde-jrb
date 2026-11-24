@@ -642,6 +642,16 @@ testAsync("Contrato: adaptador BYOD declara licencia, ventana y estados API", as
   const license = contract.licenseBlock({ dem: { license: "Permiso interno", attribution: "Finca" } });
   assert.strictEqual(license.type, "byod");
   assert.strictEqual(license.redistribution, false);
+  const igacLicense = contract.licenseBlock({
+    dem: {
+      sourceId: "igac-d1a5711e63ac4e9baabff7544cec1bd1",
+      license: "Datos abiertos IGAC",
+      attribution: "Instituto Geográfico Agustín Codazzi (IGAC)",
+    },
+  });
+  assert.strictEqual(igacLicense.type, "open");
+  assert.strictEqual(igacLicense.redistribution, true);
+  assert.strictEqual(igacLicense.licenseId, "igac-open-data");
 });
 
 (async () => {
