@@ -22,7 +22,7 @@
 
   if (!core) throw new Error("CVDemCompute necesita dem-core.js.");
 
-  const COMPUTE_VERSION = "0.2.0";
+  const COMPUTE_VERSION = "0.3.0";
   const EARTH_R = 6371008.8;
   const EARTH_M_PER_DEG = 111195.0802335329;
   const DEG = Math.PI / 180;
@@ -446,6 +446,55 @@
       }
     }
     return { row0, row1, col0, col1 };
+  }
+
+  // Vista compacta de pendientes para dibujar sobre el croquis. No entra en
+  // el hash ni en el contrato: es una representacion de pantalla. Cada celda
+  // guarda 0 (sin dato) o el indice 1..n de la banda de pendiente.
+  function buildSlopePreview(slope, win, bands) {
+    const maxSide = 120;
+    const step = Math.max(1, Math.ceil(Math.max(win.width, win.height) / maxSide));
+    const width = Math.ceil(win.width / step);
+    const height = Math.ceil(win.height / step);
+    const cells = new Array(width * height).fill(0);
+    const bandIds = (bands || core.DEFAULT_BANDS).map((band) => band.id);
+    for (let row = 0; row < height; row += 1) {
+      const sourceRow0 = row * step;
+      const sourceRow1 = Math.min(win.height, sourceRow0 + step);
+      for (let col = 0; col < width; col += 1) {
+        const sourceCol0 = col * step;
+        const sourceCol1 = Math.min(win.width, sourceCol0 + step);
+        let sum = 0;
+        let count = 0;
+        for (let sourceRow = sourceRow0; sourceRow < sourceRow1; sourceRow += 1) {
+          const start = sourceRow * win.width;
+          for (let sourceCol = sourceCol0; sourceCol < sourceCol1; sourceCol += 1) {
+            const value = slope[start + sourceCol];
+            if (!Number.isFinite(value)) continue;
+            sum += value;
+            count += 1;
+          }
+        }
+        if (!count) continue;
+        const band = core.bandForSlope(sum / count, bands);
+        if (!band) continue;
+        const index = bandIds.indexOf(band.id);
+        if (index >= 0) cells[row * width + col] = index + 1;
+      }
+    }
+    return {
+      width,
+      height,
+      step,
+      bands: bandIds,
+      cells,
+      bbox: {
+        west: round(win.west, 8),
+        south: round(win.north - win.height * win.cellY, 8),
+        east: round(win.west + win.width * win.cellX, 8),
+        north: round(win.north, 8),
+      },
+    };
   }
 
   function zonalSector(input) {
@@ -916,6 +965,7 @@
       clipped: sectors.some((sector) => sector.clipped),
     });
     const overallSlope = buildSlopeBlock(overall, window);
+    const slopePreview = buildSlopePreview(slope, win, bands);
     const nodataPct = overall.cellsGross > 0
       ? ((overall.cellsGross - overall.cells) / overall.cellsGross) * 100
       : 0;
@@ -1080,6 +1130,7 @@
       },
       validation,
       slope: overallSlope,
+      slopePreview,
       sectors,
       warnings,
       rulesId,
@@ -1116,6 +1167,7 @@
     pickWindow,
     zonalSector,
     buildSlopeBlock,
+    buildSlopePreview,
     sectorClass,
     buildWarnings,
   };

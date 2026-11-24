@@ -17,7 +17,7 @@ Abre el enlace en el móvil e instálala como PWA (ver más abajo).
 La app instalada se actualiza sola al abrirla con internet: descarga la versión nueva, elimina la caché anterior y conserva los casos guardados. **No hace falta desinstalar.**
 
 - En el pie se muestra la **versión en uso** y el botón **Buscar actualización**, que consulta el service worker, aplica la versión nueva y recarga la app.
-- Los archivos se referencian con su versión (`app.js?v=1.5.0`, `styles.css?v=1.5.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
+- Los archivos se referencian con su versión (`app.js?v=1.6.0`, `styles.css?v=1.6.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
 - La primera apertura tras una publicación puede mostrar la versión anterior; al abrir de nuevo (o pulsar **Buscar actualización**) queda la última.
 - Desinstalar puede borrar los casos guardados en el dispositivo. Exporta un **respaldo JSON** antes de hacerlo.
 
@@ -43,6 +43,10 @@ La app instalada se actualiza sola al abrirla con internet: descarga la versión
 - **Observaciones** del levantamiento y **huella SHA-256** del proyecto para verificar la integridad del archivo digital.
 
 - **Pendiente del terreno (BYOD):** carga tu propio DTM `.asc` o GeoTIFF en EPSG:4326. El archivo se procesa en tu dispositivo y no se guarda. La app calcula pendiente media/P95/máxima, distribución por rangos, incertidumbre orientativa y una clase agrológica asistida. La clase oficial IGAC/UPRA es la base; la pendiente solo puede empeorarla y la app nunca confirma una clase sin revisión humana.
+
+- **Pendiente sobre el croquis:** el resumen de pendiente y la leyenda de rangos aparecen directamente en el plano. Si el resultado incluye vista de pendientes, puedes activar o desactivar la capa coloreada con el botón de terreno.
+
+- **Informe completo en pantalla:** el botón **Ver informe** muestra todas las secciones dentro de la app, sin descargar un PDF. El croquis del informe incluye la capa de pendientes cuando está disponible. Desde el mismo informe puedes imprimir o guardar PDF si lo necesitas.
 
 - **Informe técnico imprimible** (PDF): marca, croquis con grilla geográfica, coordenadas en grados decimales y DMS, comparación con la referencia, vértices y linderos, lotes, repeticiones, fotos, pendiente del terreno, observaciones, firmas y huella.
 
