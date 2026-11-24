@@ -255,6 +255,16 @@ testAsync("Analisis: plano al 10 % con DTM validado", async () => {
   assert.strictEqual(result.validation.ok, true);
   assert.strictEqual(result.hash.length, 64);
   assert.strictEqual(result.resultHash, `sha256:${result.hash}`);
+  assert.ok(result.slopePreview, "debe incluir vista compacta de pendientes");
+  assert.strictEqual(
+    result.slopePreview.cells.length,
+    result.slopePreview.width * result.slopePreview.height
+  );
+  const previewBands = result.slopePreview.cells.filter((value) => value > 0);
+  assert.ok(previewBands.length > 0, "la vista debe tener celdas con pendiente");
+  assert.ok(previewBands.every((value) => value === 3), "10 % cae en la banda 7-12");
+  assert.strictEqual(result.slopePreview.bbox.north, result.meta.bbox.north);
+  assert.strictEqual(result.summary.slopePreview, undefined);
 });
 
 testAsync("Analisis: oficial II + 18 % -> propuesta IV rojo", async () => {

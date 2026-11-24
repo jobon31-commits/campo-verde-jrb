@@ -1,12 +1,12 @@
 ﻿/* CAMPO VERDE JRB Â· servicio sin conexiÃ³n */
 "use strict";
 
-const CACHE_NAME = "campoverdejr-v9";
+const CACHE_NAME = "campoverdejr-v10";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.5.0",
-  "./app.js?v=1.5.0",
+  "./styles.css?v=1.6.0",
+  "./app.js?v=1.6.0",
   "./geo/import.js?v=1.5.0",
   "./manifest.json",
   "./icons/favicon.svg",

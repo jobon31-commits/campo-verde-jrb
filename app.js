@@ -11,7 +11,7 @@
   const DEG = Math.PI / 180;
   const CIRCLE_SEGMENTS = 64;
   const APP_NAME = "CAMPO VERDE JRB";
-  const APP_VERSION = "1.5.0";
+  const APP_VERSION = "1.6.0";
   const BRAND_LINE = "AVALÚOS INTEGRALES · Urbanos & Rurales";
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
@@ -55,6 +55,15 @@
     { id: "50-75", label: "50–75 %", tone: "is-danger" },
     { id: ">75", label: "> 75 %", tone: "is-danger" },
   ];
+  const DEM_BAND_COLORS = {
+    "0-3": "#2e7d32",
+    "3-7": "#9ccc65",
+    "7-12": "#fbc02d",
+    "12-25": "#fb8c00",
+    "25-50": "#e53935",
+    "50-75": "#8e24aa",
+    ">75": "#4e342e",
+  };
   const DEMO_REF = { lat: -34.9012, lon: -60.3011 };
   const DEMO_LOCALS = [[-95, -66], [95, -66], [88, 66], [-98, 66]];
   const MAX_PHOTOS = 8;
@@ -539,6 +548,8 @@
   let shapeType = "quad";
   let labelsOn = true;
   let gridOn = true;
+  let slopeOverlayOn = true;
+  let slopePreviewCache = { key: "", canvas: null };
   let mapGridInfo = null;
   let saveTimer = null;
   let hashTimer = null;
@@ -632,6 +643,17 @@
     mapHint: $("#mapHint"),
     mapCoords: $("#mapCoords"),
     mapSubtitle: $("#mapSubtitle"),
+    mapDataCard: $("#mapDataCard"),
+    mapDataStatus: $("#mapDataStatus"),
+    mapDemMean: $("#mapDemMean"),
+    mapDemP95: $("#mapDemP95"),
+    mapDemClass: $("#mapDemClass"),
+    mapDemWindow: $("#mapDemWindow"),
+    mapDemCoverage: $("#mapDemCoverage"),
+    mapDemValidation: $("#mapDemValidation"),
+    mapSlopeLegend: $("#mapSlopeLegend"),
+    slopeLayerBtn: $("#slopeLayerBtn"),
+    viewReportBtn: $("#viewReportBtn"),
     mapArea: $("#mapArea"),
     mapPerimeter: $("#mapPerimeter"),
     methodBadge: $("#methodBadge"),
@@ -677,6 +699,10 @@
     dialogCancel: $("#dialogCancel"),
     toast: $("#toast"),
     printReport: $("#printReport"),
+    reportDialog: $("#reportDialog"),
+    reportDialogBody: $("#reportDialogBody"),
+    reportCloseBtn: $("#reportCloseBtn"),
+    reportPrintBtn: $("#reportPrintBtn"),
     restoreInput: $("#restoreInput"),
     demPanel: $("#demPanel"),
     demStatus: $("#demStatus"),
@@ -1550,6 +1576,14 @@
       gridBtn.classList.toggle("is-on", gridOn);
       gridBtn.setAttribute("aria-pressed", String(gridOn));
     }
+    const slopeBtn = $('[data-map="slope"]');
+    if (slopeBtn) {
+      const preview = getSlopePreview(state.dem && state.dem.result);
+      slopeBtn.disabled = !preview;
+      const on = Boolean(preview) && slopeOverlayOn;
+      slopeBtn.classList.toggle("is-on", on);
+      slopeBtn.setAttribute("aria-pressed", String(on));
+    }
   }
 
   /* ---------- Croquis ---------- */
@@ -1916,6 +1950,46 @@
     ctx.restore();
   }
 
+  function drawSlopePreview(points, w, h, ref) {
+    if (!slopeOverlayOn) return;
+    const result = state.dem && state.dem.result;
+    const preview = getSlopePreview(result);
+    if (!preview) return;
+    const { width, height, bands, bbox } = preview;
+    const nw = toScreen({ lat: bbox.north, lon: bbox.west }, ref, w, h);
+    const se = toScreen({ lat: bbox.south, lon: bbox.east }, ref, w, h);
+    const drawW = se.x - nw.x;
+    const drawH = se.y - nw.y;
+    if (!(drawW > 0) || !(drawH > 0)) return;
+
+    const cacheKey = `${result.resultHash || result.hash || "demo"}:${width}x${height}:${preview.cells.length}:${bbox.west},${bbox.south},${bbox.east},${bbox.north}`;
+    if (slopePreviewCache.key !== cacheKey || !slopePreviewCache.canvas) {
+      const layer = document.createElement("canvas");
+      layer.width = width;
+      layer.height = height;
+      const layerCtx = layer.getContext("2d");
+      for (let row = 0; row < height; row += 1) {
+        for (let col = 0; col < width; col += 1) {
+          const value = preview.cells[row * width + col];
+          if (!value) continue;
+          const bandId = bands[value - 1];
+          if (!bandId) continue;
+          layerCtx.fillStyle = slopeBandColor(bandId, value - 1);
+          layerCtx.fillRect(col, row, 1, 1);
+        }
+      }
+      slopePreviewCache = { key: cacheKey, canvas: layer };
+    }
+
+    ctx.save();
+    pathPolygon(points, true);
+    ctx.clip();
+    ctx.globalAlpha = 0.66;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(slopePreviewCache.canvas, nw.x, nw.y, drawW, drawH);
+    ctx.restore();
+  }
+
   function paintMap(metrics) {
     const { w, h } = setupCanvas();
     lastMapW = w;
@@ -1943,6 +2017,7 @@
       ctx.fillStyle = fill;
       ctx.fill();
       ctx.restore();
+      drawSlopePreview(points, w, h, ref);
       pathPolygon(points, true);
       ctx.strokeStyle = "#1d6a4b";
       ctx.lineWidth = 2.2;
@@ -2044,6 +2119,7 @@
       el.mapCoords.removeAttribute("title");
     }
     paintMap(metrics);
+    updateMapSlopeUI();
   }
 
   function redrawMap() {
@@ -2186,6 +2262,11 @@
       if (action === "grid") {
         gridOn = !gridOn;
         updateHistoryButtons();
+        redrawMap();
+      }
+      if (action === "slope") {
+        if (el.slopeLayerBtn && el.slopeLayerBtn.disabled) return;
+        slopeOverlayOn = !slopeOverlayOn;
         redrawMap();
       }
       if (action === "zoom-in" || action === "zoom-out") {
@@ -3638,6 +3719,7 @@
       gridOn = true;
       updateHistoryButtons();
     }
+    if (getSlopePreview(state.dem && state.dem.result)) slopeOverlayOn = true;
     persistState();
     view.autoFit = true;
     renderMap(metrics);
@@ -3757,6 +3839,7 @@
     if (action === "kml") exportKml();
     if (action === "geojson") exportGeoJson();
     if (action === "summary") copySummary();
+    if (action === "view") viewReport();
     if (action === "print") printReport();
     if (action === "backup") backupProject();
     if (action === "restore") {
@@ -4064,6 +4147,42 @@
     });
   }
 
+  function closeReportViewer() {
+    if (!el.reportDialog) return;
+    if (typeof el.reportDialog.close === "function" && el.reportDialog.open) {
+      el.reportDialog.close();
+    } else {
+      el.reportDialog.hidden = true;
+    }
+  }
+
+  function viewReport() {
+    const metrics = computeMetrics();
+    if (metrics.n < 3) {
+      showToast("Necesitas al menos 3 vértices para generar el informe.");
+      return;
+    }
+    if (!gridOn) {
+      gridOn = true;
+      updateHistoryButtons();
+    }
+    if (getSlopePreview(state.dem && state.dem.result)) slopeOverlayOn = true;
+    view.autoFit = true;
+    renderMap(metrics);
+    buildPrintReport();
+    if (el.reportDialogBody) {
+      el.reportDialogBody.innerHTML = el.printReport.innerHTML;
+      el.reportDialogBody.scrollTop = 0;
+    }
+    if (el.reportDialog) {
+      if (typeof el.reportDialog.showModal === "function") {
+        if (!el.reportDialog.open) el.reportDialog.showModal();
+      } else {
+        el.reportDialog.hidden = false;
+      }
+    }
+  }
+
   function initPrint() {
     window.addEventListener("beforeprint", () => {
       const metrics = computeMetrics();
@@ -4075,6 +4194,19 @@
       }
       if (reportDirty || el.printReport.dataset.dirty !== "false") buildPrintReport();
     });
+    if (el.viewReportBtn) el.viewReportBtn.addEventListener("click", viewReport);
+    if (el.reportCloseBtn) el.reportCloseBtn.addEventListener("click", closeReportViewer);
+    if (el.reportPrintBtn) {
+      el.reportPrintBtn.addEventListener("click", () => {
+        closeReportViewer();
+        printReport();
+      });
+    }
+    if (el.reportDialog) {
+      el.reportDialog.addEventListener("click", (event) => {
+        if (event.target === el.reportDialog) closeReportViewer();
+      });
+    }
   }
 
   function initGpsPanel() {
@@ -4274,6 +4406,98 @@
     return null;
   }
 
+  function getSlopePreview(result) {
+    const preview = result && result.slopePreview;
+    if (!preview || !Array.isArray(preview.cells)) return null;
+    const width = Math.trunc(preview.width);
+    const height = Math.trunc(preview.height);
+    const bbox = preview.bbox || {};
+    if (!(width > 0) || !(height > 0)) return null;
+    if (preview.cells.length < width * height) return null;
+    if (![bbox.west, bbox.east, bbox.south, bbox.north].every((value) => Number.isFinite(+value))) return null;
+    if (!(+bbox.east > +bbox.west) || !(+bbox.north > +bbox.south)) return null;
+    return {
+      ...preview,
+      width,
+      height,
+      cells: preview.cells,
+      bbox: {
+        west: +bbox.west,
+        east: +bbox.east,
+        south: +bbox.south,
+        north: +bbox.north,
+      },
+      bands: Array.isArray(preview.bands) && preview.bands.length
+        ? preview.bands
+        : DEM_BANDS.map((band) => band.id),
+    };
+  }
+
+  function slopeBandColor(bandId, index) {
+    if (DEM_BAND_COLORS[bandId]) return DEM_BAND_COLORS[bandId];
+    const palette = Object.values(DEM_BAND_COLORS);
+    return palette[index % palette.length];
+  }
+
+  function updateMapSlopeUI() {
+    if (!el.mapDataCard) return;
+    const result = state.dem && state.dem.result;
+    const preview = getSlopePreview(result);
+    const slope = (result && result.slope) || {};
+    const sector = result && result.sectors && result.sectors[0] ? result.sectors[0] : {};
+    const cls = sector.class || {};
+    const validation = (result && result.validation) || {};
+    const active = Boolean(result);
+    el.mapDataCard.hidden = !active;
+    if (!active) {
+      if (el.slopeLayerBtn) {
+        el.slopeLayerBtn.disabled = true;
+        el.slopeLayerBtn.classList.remove("is-on");
+        el.slopeLayerBtn.setAttribute("aria-pressed", "false");
+      }
+      return;
+    }
+
+    const status = demStatusLabel(cls.status, cls.statusEs);
+    setText(el.mapDataStatus, status);
+    setText(el.mapDemMean, `${demNumber(slope.meanPct, 2)} %`);
+    setText(el.mapDemP95, `${demNumber(slope.p95Pct, 2)} %`);
+    setText(el.mapDemClass, demProposedClass(cls) || status);
+    const baseline = demEffectiveBaseline(result.meta);
+    setText(el.mapDemWindow, baseline !== null
+      ? `${demNumber(result.meta && result.meta.windowM, 0)} / ${demNumber(baseline, 1)} m`
+      : `${demNumber(result.meta && result.meta.windowM, 0)} m`);
+    setText(el.mapDemCoverage, Number.isFinite(+((result.meta || {}).coverage))
+      ? `${demNumber(+result.meta.coverage * 100, 1)} %`
+      : "—");
+    setText(el.mapDemValidation, validation.ok ? "Validado" : "No validado");
+    el.mapDemValidation.title = demValidationLabel(validation);
+    el.mapDemMean.title = `Pendiente media: ${demNumber(slope.meanPct, 2)} %`;
+    el.mapDemP95.title = `Pendiente P95: ${demNumber(slope.p95Pct, 2)} %`;
+    el.mapDemClass.title = `${status} · ${demProposedClass(cls) || "sin clase propuesta"}`;
+    el.mapDemWindow.title = baseline !== null
+      ? `Ventana ${demNumber(result.meta && result.meta.windowM, 0)} m · base efectiva ${demNumber(baseline, 1)} m`
+      : "Ventana de cálculo";
+    el.mapDemCoverage.title = "Cobertura de celdas con pendiente válida";
+    el.mapDemValidation.title = demValidationLabel(validation);
+
+    if (el.slopeLayerBtn) {
+      el.slopeLayerBtn.disabled = !preview;
+      const on = Boolean(preview) && slopeOverlayOn;
+      el.slopeLayerBtn.classList.toggle("is-on", on);
+      el.slopeLayerBtn.setAttribute("aria-pressed", String(on));
+    }
+
+    if (el.mapSlopeLegend) {
+      const bands = preview ? preview.bands : DEM_BANDS.map((band) => band.id);
+      el.mapSlopeLegend.innerHTML = bands.map((bandId, index) => {
+        const meta = DEM_BANDS.find((band) => band.id === bandId);
+        return `<span><i style="background:${slopeBandColor(bandId, index)}"></i>${escapeHtml(meta ? meta.label : bandId)}</span>`;
+      }).join("");
+      el.mapSlopeLegend.hidden = !(preview && slopeOverlayOn);
+    }
+  }
+
   function setDemStatus(kind, text) {
     if (!el.demStatus) return;
     el.demStatus.className = `dem-status${kind ? ` is-${kind}` : ""}`;
@@ -4375,6 +4599,7 @@
     el.demResultBody.hidden = true;
     setText(el.demHash, "—");
     el.demHash.title = "";
+    updateMapSlopeUI();
   }
 
   function renderDemResult(result) {
@@ -4444,6 +4669,8 @@
 
     setText(el.demHash, shortHash(result.hash));
     el.demHash.title = result.hash ? `SHA-256 del resultado DEM: ${result.hash}` : "";
+    updateMapSlopeUI();
+    redrawMap();
   }
 
   function demSummaryText(result) {
@@ -4724,6 +4951,7 @@
     setDemError("");
     renderDemEmpty();
     refreshDemState();
+    redrawMap();
     persistState();
     showToast("DEM quitado del caso. El archivo nunca se guardó.");
   }

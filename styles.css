@@ -830,6 +830,204 @@ svg { display: block; }
 }
 .map-warning .icon { width: 13px; height: 13px; }
 
+.map-report-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  padding: 6px 10px;
+  font-size: 10px;
+  background: rgba(255, 253, 246, 0.94);
+  backdrop-filter: blur(6px);
+}
+
+.map-data-card {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  width: min(310px, calc(100% - 24px));
+  padding: 10px 11px;
+  background: rgba(255, 253, 246, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(7px);
+  pointer-events: none;
+}
+
+.map-data-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.map-data-head strong {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green-dark);
+}
+
+.map-data-head span {
+  font-size: 8.5px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.map-data-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 9px;
+}
+
+.map-data-grid span {
+  display: block;
+  font-size: 7.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.map-data-grid b {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-slope-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+
+.map-slope-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.map-slope-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+/* ---------- Informe en pantalla ---------- */
+.report-dialog {
+  width: min(980px, calc(100vw - 32px));
+  max-width: 980px;
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 24px 80px -30px rgba(10, 25, 16, 0.65);
+}
+
+.report-dialog::backdrop { background: rgba(12, 28, 18, 0.48); }
+
+.report-dialog-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #fffdf8;
+  border-bottom: 1px solid var(--line);
+}
+
+.report-dialog-bar strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+
+.report-dialog-bar span {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.report-dialog-bar .btn-row { flex: none; }
+.report-dialog-bar .btn-row .btn { flex: none; }
+
+.report-dialog-body {
+  padding: 22px 24px 32px;
+  overflow: auto;
+  max-height: calc(100vh - 110px);
+  background: #fff;
+}
+
+@media (max-width: 700px) {
+  .map-report-btn {
+    top: 8px;
+    right: 8px;
+    padding: 5px 8px;
+    font-size: 9px;
+  }
+
+  .map-data-card {
+    left: 8px;
+    bottom: 8px;
+    width: calc(100% - 16px);
+    padding: 8px 9px;
+  }
+
+  .map-data-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px 7px; }
+  .map-data-grid b { font-size: 9.5px; }
+  .map-slope-legend { gap: 3px 6px; }
+  .map-slope-legend span { font-size: 7.5px; }
+
+  .report-dialog {
+    width: 100vw;
+    max-width: none;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    border: 0;
+  }
+
+  .report-dialog-bar {
+    padding: 9px 10px;
+    gap: 8px;
+  }
+
+  .report-dialog-bar strong { font-size: 14px; }
+  .report-dialog-bar span { display: none; }
+  .report-dialog-bar .btn-sm { padding: 5px 7px; font-size: 9px; }
+  .report-dialog-body { padding: 12px 10px 26px; max-height: calc(100vh - 62px); }
+}
+
+@media print {
+  .report-dialog { display: none !important; }
+}
+
 .empty-state {
   position: absolute;
   inset: 0;

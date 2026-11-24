@@ -1,9 +1,9 @@
 # Módulo DEM · plan de trabajo
 
 - **Rama:** `main` publicada; el desarrollo original está en `feat/pendiente-dtm`
-- **Base:** `main` con merge `1389cc6`; esta versión usa el service worker `campoverdejr-v9`
-- **Fecha:** 2026-11-02
-- **Estado:** BYOD e importación de polígonos publicados; free/pro siguen bloqueados por licencias
+- **Base:** `main` con merge `1389cc6`; esta versión usa el service worker `campoverdejr-v10`
+- **Fecha:** 2026-11-24
+- **Estado:** BYOD, pendiente sobre el croquis e informe en pantalla publicados; free/pro siguen bloqueados por licencias
 
 ## Qué existe en esta rama
 
@@ -85,6 +85,8 @@ Pendiente:
 Hecho:
 - `sectors` con anillo, huecos y multipolígono; rasterización por regla par-impar.
 - Importación de un polígono desde KML, GeoJSON, CSV o TXT en la pestaña Coordenadas.
+- Pendiente coloreada sobre el croquis con resumen y leyenda de rangos.
+- Informe completo en pantalla, sin descargar PDF.
 - Área efectiva, área bruta, cobertura, celdas válidas y celdas rasterizadas.
 - Clase oficial IGAC/UPRA como base, semáforo y propuesta asistida.
 - `class.finalClass` queda `null`: solo una confirmación humana puede fijarla.
@@ -121,6 +123,7 @@ case.dem = {
     dem, validation,
     slope: { meanPct, p50Pct, p95Pct, maxPct, classesPct, classesHa,
              classShare, uncertaintyPct, groundConfidencePct },
+    slopePreview: { width, height, step, bands, cells, bbox },
     sectors: [{
       id, name, cells, cellsGross, areaHa, areaGrossHa, coverage,
       status, statusEs, slope, class
@@ -136,6 +139,7 @@ case.dem = {
 - `hash` conserva el digest sin prefijo para compatibilidad con casos guardados. `payloadHash` sigue firmando el respaldo completo y es independiente.
 - `areaHa` es área efectiva (solo celdas con pendiente válida); `areaGrossHa` incluye las celdas rasterizadas sin dato; `coverage = areaHa / areaGrossHa`.
 - `classesHa` y `classShare` usan las etiquetas de intervalo (`0-3`, `3-7`, …, `>75`). `classesPct` queda como campo legado para casos antiguos.
+- `slopePreview` es una vista compacta (máx. 120 celdas por lado) para colorear el croquis; no entra en `resultHash` ni en el contrato.
 - `status` usa códigos API; `statusEs` conserva la etiqueta en español para la interfaz.
 - `class.finalClass` queda `null` salvo confirmación humana; la propuesta vive en `class.proposedClass`.
 - El archivo crudo **nunca** se persiste; solo declaración y resultado compacto.
