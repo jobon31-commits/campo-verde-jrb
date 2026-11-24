@@ -1,24 +1,26 @@
 ﻿/* CAMPO VERDE JRB Â· servicio sin conexiÃ³n */
 "use strict";
 
-const CACHE_NAME = "campoverdejr-v10";
+const CACHE_NAME = "campoverdejr-v11";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.6.0",
-  "./app.js?v=1.6.0",
+  "./styles.css?v=1.7.0",
+  "./app.js?v=1.7.0",
   "./geo/import.js?v=1.5.0",
+  "./dem/igac.js?v=1.7.0",
+  "./dem/igac-index.json?v=1.7.0",
   "./manifest.json",
   "./icons/favicon.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",
   "./icons/apple-touch-icon.png",
-  "./dem/dem-core.js?v=1.4.0",
-  "./dem/dem-file.js?v=1.4.0",
-  "./dem/dem-contract.js?v=1.4.0",
-  "./dem/dem-compute.js?v=1.4.0",
-  "./dem/dem-worker.js?v=1.4.0",
+  "./dem/dem-core.js?v=1.7.0",
+  "./dem/dem-file.js?v=1.7.0",
+  "./dem/dem-contract.js?v=1.7.0",
+  "./dem/dem-compute.js?v=1.7.0",
+  "./dem/dem-worker.js?v=1.7.0",
 ];
 
 self.addEventListener("install", (event) => {

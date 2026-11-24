@@ -17,7 +17,7 @@ Abre el enlace en el móvil e instálala como PWA (ver más abajo).
 La app instalada se actualiza sola al abrirla con internet: descarga la versión nueva, elimina la caché anterior y conserva los casos guardados. **No hace falta desinstalar.**
 
 - En el pie se muestra la **versión en uso** y el botón **Buscar actualización**, que consulta el service worker, aplica la versión nueva y recarga la app.
-- Los archivos se referencian con su versión (`app.js?v=1.6.0`, `styles.css?v=1.6.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
+- Los archivos se referencian con su versión (`app.js?v=1.7.0`, `styles.css?v=1.7.0`) para que una página nueva nunca se mezcle con código antiguo en caché.
 - La primera apertura tras una publicación puede mostrar la versión anterior; al abrir de nuevo (o pulsar **Buscar actualización**) queda la última.
 - Desinstalar puede borrar los casos guardados en el dispositivo. Exporta un **respaldo JSON** antes de hacerlo.
 
@@ -43,6 +43,8 @@ La app instalada se actualiza sola al abrirla con internet: descarga la versión
 - **Observaciones** del levantamiento y **huella SHA-256** del proyecto para verificar la integridad del archivo digital.
 
 - **Pendiente del terreno (BYOD):** carga tu propio DTM `.asc` o GeoTIFF en EPSG:4326. El archivo se procesa en tu dispositivo y no se guarda. La app calcula pendiente media/P95/máxima, distribución por rangos, incertidumbre orientativa y una clase agrológica asistida. La clase oficial IGAC/UPRA es la base; la pendiente solo puede empeorarla y la app nunca confirma una clase sin revisión humana.
+
+- **Cobertura automática IGAC:** con un polígono dibujado, pulsa **Buscar cobertura**. La app consulta un índice de 291 teselas LiDAR públicas del IGAC, elige la de mejor resolución que cubra todo el predio y descarga el GeoTIFF directamente al teléfono para calcular. No sube el polígono ni el DEM a un servidor propio. Si no hay cobertura, deja el modo BYOD disponible.
 
 - **Pendiente sobre el croquis:** el resumen de pendiente y la leyenda de rangos aparecen directamente en el plano. Si el resultado incluye vista de pendientes, puedes activar o desactivar la capa coloreada con el botón de terreno.
 
@@ -114,7 +116,9 @@ index.html        Estructura, paneles, PWA e informe imprimible
 styles.css        Diseño, croquis, tablas, adaptación móvil e impresión
 app.js            Estado, casos, cálculos geodésicos, croquis, fotos, informe y persistencia
 geo/import.js     Importador de polígonos KML, GeoJSON, CSV y TXT
-dem/              Lector DEM, núcleo, cálculo, worker y adaptador de contrato
+dem/              Lector DEM, núcleo, cálculo, worker, cobertura IGAC y contrato
+dem/igac-index.json  Índice de teselas LiDAR públicas del IGAC
+tools/            Generador del índice de cobertura IGAC
 manifest.json     Manifest de instalación (nombre, iconos, colores)
 sw.js             Service worker: caché y funcionamiento sin conexión
 icons/            Iconos 192/512, maskable, Apple Touch y favicon

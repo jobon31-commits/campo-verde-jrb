@@ -6,10 +6,10 @@
 "use strict";
 
 importScripts(
-  "dem-core.js?v=1.4.0",
-  "dem-file.js?v=1.4.0",
-  "dem-contract.js?v=1.4.0",
-  "dem-compute.js?v=1.4.0"
+  "dem-core.js?v=1.7.0",
+  "dem-file.js?v=1.7.0",
+  "dem-contract.js?v=1.7.0",
+  "dem-compute.js?v=1.7.0"
 );
 
 self.onmessage = async (event) => {

@@ -11,7 +11,7 @@
   const DEG = Math.PI / 180;
   const CIRCLE_SEGMENTS = 64;
   const APP_NAME = "CAMPO VERDE JRB";
-  const APP_VERSION = "1.6.0";
+  const APP_VERSION = "1.7.0";
   const BRAND_LINE = "AVALÚOS INTEGRALES · Urbanos & Rurales";
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
@@ -559,6 +559,10 @@
   let deferredInstallPrompt = null;
   let demWorker = null;
   let demSelectedFile = null;
+  let demAutoSource = null;
+  let igacIndex = null;
+  let igacIndexPromise = null;
+  let igacSelection = null;
   let demBusy = false;
   let demFormDirty = false;
   let demRequestId = 0;
@@ -719,6 +723,16 @@
     demYear: $("#demYear"),
     demLicense: $("#demLicense"),
     demOfficialClass: $("#demOfficialClass"),
+    demCoverage: $("#demCoverage"),
+    demCoverageBtn: $("#demCoverageBtn"),
+    demCoverageSub: $("#demCoverageSub"),
+    demCoverageNote: $("#demCoverageNote"),
+    demCoverageResult: $("#demCoverageResult"),
+    demCoverageTitle: $("#demCoverageTitle"),
+    demCoverageMeta: $("#demCoverageMeta"),
+    demCoverageWarning: $("#demCoverageWarning"),
+    demCoverageError: $("#demCoverageError"),
+    demUseCoverageBtn: $("#demUseCoverageBtn"),
     demBareEarth: $("#demBareEarth"),
     demValidationSource: $("#demValidationSource"),
     demValidationN: $("#demValidationN"),
@@ -865,6 +879,9 @@
       format: String(declarationRaw.format || "").slice(0, 20),
       license: String(declarationRaw.license || "").slice(0, 160),
       attribution: String(declarationRaw.attribution || "").slice(0, 160),
+      sourceUrl: String(declarationRaw.sourceUrl || "").slice(0, 300),
+      sourceTitle: String(declarationRaw.sourceTitle || "").slice(0, 200),
+      sourceCoverage: String(declarationRaw.sourceCoverage || "").slice(0, 40),
       acquisitionYear: optionalNumber(declarationRaw.acquisitionYear),
       verticalAccuracyM: optionalNumber(declarationRaw.verticalAccuracyM),
       officialClass: allowedClasses.includes(declarationRaw.officialClass) ? declarationRaw.officialClass : null,
@@ -1176,6 +1193,7 @@
 
   function applyPoints(points, method, options = {}) {
     if ((gps.active || gps.paused) && method && method !== "gps") stopGpsForManual();
+    resetDemCoverage();
     history.undo.push(snapshot());
     if (history.undo.length > 60) history.undo.shift();
     history.redo.length = 0;
@@ -4498,6 +4516,189 @@
     }
   }
 
+  function setDemCoverageError(message) {
+    if (!el.demCoverageError) return;
+    el.demCoverageError.textContent = message || "";
+    el.demCoverageError.hidden = !message;
+  }
+
+  function resetDemCoverage() {
+    igacSelection = null;
+    if (el.demCoverageResult) el.demCoverageResult.hidden = true;
+    if (el.demCoverageWarning) el.demCoverageWarning.hidden = true;
+    if (el.demCoverageNote) {
+      el.demCoverageNote.textContent = "Consulta si hay una tesela IGAC que cubra todo el predio.";
+    }
+    if (el.demCoverageSub) {
+      el.demCoverageSub.textContent = "Busca un DTM LiDAR público para este polígono.";
+    }
+    setDemCoverageError("");
+  }
+
+  async function loadIgacIndex() {
+    if (igacIndex) return igacIndex;
+    if (!igacIndexPromise) {
+      igacIndexPromise = fetch("dem/igac-index.json?v=1.7.0", { cache: "force-cache" })
+        .then((response) => {
+          if (!response.ok) throw new Error(`No se pudo cargar el índice IGAC (${response.status}).`);
+          return response.json();
+        })
+        .then((data) => {
+          igacIndex = data;
+          return data;
+        })
+        .catch((error) => {
+          igacIndexPromise = null;
+          throw error;
+        });
+    }
+    return igacIndexPromise;
+  }
+
+  function coverageResolutionText(source) {
+    const value = Number(source && source.resolutionM);
+    if (!Number.isFinite(value) || value <= 0) return "resolución no declarada";
+    return `${fmt(value, value < 1 ? 2 : 0)} m`;
+  }
+
+  async function checkIgacCoverage() {
+    if (!el.demCoverageBtn) return;
+    setDemCoverageError("");
+    if (state.points.length < 3) {
+      setDemCoverageError("Dibuja el predio con al menos 3 vértices para consultar cobertura.");
+      return;
+    }
+    if (!window.CVIGAC) {
+      setDemCoverageError("El módulo de cobertura IGAC no está disponible. Recarga la app.");
+      return;
+    }
+    const polygonBbox = window.CVIGAC.bboxFromPoints(state.points);
+    if (!polygonBbox) {
+      setDemCoverageError("El croquis no tiene un área válida.");
+      return;
+    }
+    el.demCoverageBtn.disabled = true;
+    el.demCoverageResult.hidden = true;
+    el.demCoverageWarning.hidden = true;
+    if (el.demCoverageSub) setText(el.demCoverageSub, "Consultando cobertura IGAC…");
+    if (el.demCoverageNote) setText(el.demCoverageNote, "Buscando teselas que cubran todo el predio…");
+    try {
+      const index = await loadIgacIndex();
+      const selection = window.CVIGAC.selectSource(index, polygonBbox);
+      igacSelection = selection;
+      if (!selection.source) {
+        if (el.demCoverageSub) setText(el.demCoverageSub, "Sin cobertura completa");
+        if (el.demCoverageNote) {
+          setText(el.demCoverageNote, `${selection.reason} Puedes cargar tu propio DEM o usar el modo BYOD.`);
+        }
+        return;
+      }
+      const source = selection.source;
+      if (el.demCoverageSub) setText(el.demCoverageSub, "Tesela IGAC encontrada");
+      setText(el.demCoverageTitle, source.title || source.name || "DTM IGAC");
+      const coverageLabel = source.coverage === "partial" ? "cobertura parcial" : "cobertura municipal";
+      setText(
+        el.demCoverageMeta,
+        `${coverageResolutionText(source)} · ${source.year || "año no declarado"} · ${coverageLabel} · ${source.license || "licencia no declarada"}`
+      );
+      const warnings = [];
+      if (source.coverage === "partial") {
+        warnings.push("La tesela cubre solo una parte del municipio; verifica que el predio esté dentro.");
+      }
+      if (!(source.verticalAccuracyM !== null
+        && source.verticalAccuracyM !== undefined
+        && Number.isFinite(Number(source.verticalAccuracyM))
+        && Number(source.verticalAccuracyM) > 0)) {
+        warnings.push("La tesela no declara LE90 en el índice; si no lo tienes, el resultado quedará limitado para clase.");
+      }
+      warnings.push("La validación con huellas GEDI/ICESat-2 no viene incluida; si no la aportas, la clase quedará como no validada.");
+      setText(el.demCoverageWarning, warnings.join(" "));
+      el.demCoverageWarning.hidden = false;
+      el.demCoverageResult.hidden = false;
+      if (el.demCoverageNote) {
+        setText(el.demCoverageNote, "Tesela encontrada. La descarga y el cálculo se hacen en el teléfono.");
+      }
+      showToast(`Cobertura IGAC: ${source.name || "tesela encontrada"}.`, 3600);
+    } catch (error) {
+      if (el.demCoverageSub) setText(el.demCoverageSub, "No se pudo consultar");
+      setDemCoverageError(error && error.message ? error.message : "No se pudo consultar la cobertura IGAC.");
+    } finally {
+      el.demCoverageBtn.disabled = false;
+      updateDemAnalyzeState();
+    }
+  }
+
+  async function useIgacCoverage() {
+    const source = igacSelection && igacSelection.source;
+    if (!source || !window.CVIGAC) return;
+    if (state.points.length < 3) {
+      setDemCoverageError("Dibuja el predio con al menos 3 vértices.");
+      return;
+    }
+    const polygonBbox = window.CVIGAC.bboxFromPoints(state.points);
+    if (!polygonBbox) {
+      setDemCoverageError("El croquis no tiene un área válida.");
+      return;
+    }
+    setDemCoverageError("");
+    el.demCoverageBtn.disabled = true;
+    el.demUseCoverageBtn.disabled = true;
+    if (el.demCoverageNote) setText(el.demCoverageNote, "Descargando DTM IGAC y preparando el cálculo…");
+    setDemStatus("busy", "Descargando…");
+    try {
+      const request = window.CVIGAC.buildExportImageUrl(source, polygonBbox, {
+        marginM: window.CVIGAC.DEFAULT_MARGIN_M,
+        maxSize: window.CVIGAC.DEFAULT_MAX_SIZE,
+      });
+      const exportResponse = await fetch(request.url, { mode: "cors" });
+      if (!exportResponse.ok) throw new Error(`IGAC respondió ${exportResponse.status} al preparar el DEM.`);
+      const exportJson = await exportResponse.json();
+      const exported = window.CVIGAC.parseExportResponse(exportJson);
+      const tiffResponse = await fetch(exported.href, { mode: "cors" });
+      if (!tiffResponse.ok) throw new Error(`IGAC respondió ${tiffResponse.status} al entregar el DEM.`);
+      const buffer = await tiffResponse.arrayBuffer();
+      if (buffer.byteLength > DEM_MAX_BYTES) {
+        throw new Error(`El DEM descargado pesa ${formatFileSize(buffer.byteLength)} y supera el límite de 80 MB.`);
+      }
+      const declaration = window.CVIGAC.declarationFor(source, request);
+      const file = new File([buffer], declaration.fileName, { type: "image/tiff" });
+      demSelectedFile = null;
+      setDemFile(file, source);
+      if (!demSelectedFile) throw new Error("No se pudo preparar el DEM descargado.");
+      el.demSource.value = declaration.name;
+      el.demYear.value = source.year ? String(source.year) : "";
+      el.demLicense.value = declaration.license;
+      const hasLe90 = source.verticalAccuracyM !== null
+        && source.verticalAccuracyM !== undefined
+        && Number.isFinite(Number(source.verticalAccuracyM))
+        && Number(source.verticalAccuracyM) > 0;
+      el.demAccuracy.value = hasLe90 ? fmt(Number(source.verticalAccuracyM), 2) : "";
+      el.demProduct.value = "DTM";
+      el.demBareEarth.checked = true;
+      el.demValidationSource.value = "";
+      el.demValidationN.value = "";
+      el.demValidationBias.value = "";
+      el.demValidationRmse.value = "";
+      updateDemBareEarth();
+      if (el.demCoverageNote) setText(el.demCoverageNote, `DTM descargado: ${source.name || "IGAC"}. Calculando pendiente…`);
+      showToast("DTM IGAC descargado. Procesando en el teléfono…", 4200);
+      await analyzeDem();
+      if (state.dem && state.dem.result) {
+        if (el.demCoverageNote) setText(el.demCoverageNote, "Análisis completado. Revisa la pendiente en el croquis y el informe.");
+      }
+    } catch (error) {
+      setDemStatus("error", "Sin DEM");
+      setDemCoverageError(
+        `${error && error.message ? error.message : "No se pudo descargar el DEM."} `
+        + "Puedes intentar de nuevo o cargar un DEM propio."
+      );
+    } finally {
+      el.demCoverageBtn.disabled = false;
+      el.demUseCoverageBtn.disabled = false;
+      updateDemAnalyzeState();
+    }
+  }
+
   function setDemStatus(kind, text) {
     if (!el.demStatus) return;
     el.demStatus.className = `dem-status${kind ? ` is-${kind}` : ""}`;
@@ -4525,6 +4726,8 @@
     const hasPolygon = state.points.length >= 3;
     el.demAnalyze.disabled = demBusy || !hasPolygon || !demSelectedFile;
     el.demClear.disabled = demBusy || (!state.dem && !demSelectedFile);
+    if (el.demCoverageBtn) el.demCoverageBtn.disabled = demBusy || !hasPolygon;
+    if (el.demUseCoverageBtn) el.demUseCoverageBtn.disabled = demBusy || !igacSelection || !igacSelection.source;
     let label = "Calcular pendiente";
     if (demBusy) label = "Calculando…";
     else if (!hasPolygon) label = "Dibuja el predio primero";
@@ -4727,6 +4930,9 @@
       producto: dem.product || null,
       fuente: dem.name || null,
       archivo: meta.fileName || null,
+      fuente_url: dem.sourceUrl || null,
+      fuente_titulo: dem.sourceTitle || null,
+      cobertura_fuente: dem.sourceCoverage || null,
       resolucion_m: meta.resolutionM ?? null,
       error_vertical_le90_m: dem.verticalAccuracyM ?? null,
       anio_captura: dem.acquisitionYear ?? null,
@@ -4838,6 +5044,7 @@
   function applyDemToUI() {
     if (!el.demPanel) return;
     demRequestId += 1;
+    demAutoSource = null;
     if (demWorker) {
       demWorker.terminate();
       demWorker = null;
@@ -4891,7 +5098,7 @@
     return `${fmt(bytes / (1024 * 1024), 1)} MB`;
   }
 
-  function setDemFile(file) {
+  function setDemFile(file, sourceMeta) {
     setDemError("");
     if (!file) return;
     const name = String(file.name || "");
@@ -4908,6 +5115,7 @@
       return;
     }
     demSelectedFile = file;
+    demAutoSource = sourceMeta || null;
     el.demDrop.classList.add("is-set");
     setText(el.demDropTitle, name);
     setText(el.demDropText, `${formatFileSize(file.size)} · listo para calcular`);
@@ -4932,6 +5140,7 @@
     }
     state.dem = null;
     demSelectedFile = null;
+    demAutoSource = null;
     el.demFile.value = "";
     el.demDrop.classList.remove("is-set");
     el.demAccuracy.value = "";
@@ -5026,15 +5235,19 @@
       date: new Date().toISOString(),
       declared: true,
     };
+    const autoSource = demAutoSource;
     const declaration = {
-      sourceId: "byod",
+      sourceId: autoSource ? autoSource.id : "byod",
       name: source,
       product,
       bareEarth,
       fileName: demSelectedFile.name,
       format: /\.(asc|txt)$/i.test(demSelectedFile.name) ? "ASC" : "GeoTIFF",
       license,
-      attribution: source,
+      attribution: autoSource ? autoSource.attribution || source : source,
+      sourceUrl: autoSource ? autoSource.url || null : null,
+      sourceTitle: autoSource ? autoSource.title || null : null,
+      sourceCoverage: autoSource ? autoSource.coverage || null : null,
       acquisitionYear: year,
       verticalAccuracyM: accuracy,
       officialClass,
@@ -5060,7 +5273,7 @@
 
     let worker;
     try {
-      worker = new Worker("dem/dem-worker.js?v=1.4.0");
+      worker = new Worker("dem/dem-worker.js?v=1.7.0");
     } catch (error) {
       setDemError("Este navegador no pudo iniciar el cálculo. Abre la app desde HTTPS o localhost, no como archivo local.");
       return;
@@ -5132,6 +5345,8 @@
       const file = el.demFile.files && el.demFile.files[0];
       if (file) setDemFile(file);
     });
+    if (el.demCoverageBtn) el.demCoverageBtn.addEventListener("click", checkIgacCoverage);
+    if (el.demUseCoverageBtn) el.demUseCoverageBtn.addEventListener("click", useIgacCoverage);
     el.demAnalyze.addEventListener("click", analyzeDem);
     el.demClear.addEventListener("click", clearDem);
     el.demProduct.addEventListener("change", markDemDirty);
@@ -5200,6 +5415,7 @@
     render();
     updateShapePreview();
     applyDemToUI();
+    resetDemCoverage();
     renderCases(true);
   }
 

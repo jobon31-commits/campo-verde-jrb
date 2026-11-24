@@ -1,9 +1,9 @@
 # Módulo DEM · plan de trabajo
 
 - **Rama:** `main` publicada; el desarrollo original está en `feat/pendiente-dtm`
-- **Base:** `main` con merge `1389cc6`; esta versión usa el service worker `campoverdejr-v10`
+- **Base:** `main` con merge `1389cc6`; esta versión usa el service worker `campoverdejr-v11`
 - **Fecha:** 2026-11-24
-- **Estado:** BYOD, pendiente sobre el croquis e informe en pantalla publicados; free/pro siguen bloqueados por licencias
+- **Estado:** BYOD, cobertura automática IGAC, pendiente sobre el croquis e informe en pantalla publicados; free/pro siguen bloqueados por licencias
 
 ## Qué existe en esta rama
 
@@ -16,23 +16,29 @@ dem/
   dem-compute.js        Cálculo con sectores, huecos, área, ventana y hash
   dem-contract.js       Adaptador al contrato API v1 (`/slope`)
   dem-worker.js         Web Worker: lee, calcula y devuelve solo el resultado
+  igac.js               Selección de cobertura y exportImage del IGAC
+  igac-index.json       Índice de 291 teselas LiDAR públicas del IGAC
 geo/
   import.js             Importador de polígonos KML, GeoJSON, CSV y TXT
+tools/
+  build-igac-index.js   Generador del índice desde ArcGIS Online
 tests/
   dem-core.test.js      31 pruebas numéricas, estados y contrato
   registry.test.js      11 pruebas de integridad del registro y ruleset
   dem-file.test.js      18 pruebas de ASC/GeoTIFF y rechazos
   dem-compute.test.js   28 pruebas de recorte, sectores, pendiente, clase y hash
   geo-import.test.js     7 pruebas de KML, GeoJSON y coordenadas
+  igac.test.js           7 pruebas de cobertura y exportImage
 docs/pendiente-dtm/
   ADR-0001-licencias.md Bloqueo legal y opciones
   CONTRATO.md           Mapeo de los 14 vectores y estados API
   PLAN.md               Este documento
 ```
 
-La app ya incluye el panel **Pendiente del terreno** (BYOD), el informe, las
-exportaciones y la importación de polígonos. El DEM crudo nunca se persiste:
-solo la declaración y el resultado compacto en `state.dem`.
+La app ya incluye el panel **Pendiente del terreno** (BYOD), la cobertura
+automática IGAC, el informe, las exportaciones y la importación de polígonos.
+El DEM crudo nunca se persiste: solo la declaración y el resultado compacto en
+`state.dem`.
 
 ## Ejecutar pruebas
 
@@ -43,9 +49,10 @@ node tests\registry.test.js
 node tests\dem-file.test.js
 node tests\dem-compute.test.js
 node tests\geo-import.test.js
+node tests\igac.test.js
 ```
 
-Resultado actual: **31/31**, **11/11**, **18/18**, **28/28** y **7/7**.
+Resultado actual: **31/31**, **11/11**, **18/18**, **28/28**, **7/7** y **7/7**.
 
 ## Fases
 
@@ -77,14 +84,16 @@ Hecho:
 - Adaptador `dem/dem-contract.js` y pruebas de los invariantes aplicables de los vectores 13 y 14.
 
 Pendiente:
-- Backend `/slope` y COG para datos abiertos.
-- Cobertura real IGAC/FABDEM, teselas y validación GEDI/ICESat-2.
+- Backend `/slope` para free global y teselas externas.
+- Fuente global 30 m con licencia comercial u open data equivalente.
+- Cobertura real más allá de las teselas IGAC indexadas.
 
 ### Fase 2 · Sectores y clase asistida
 
 Hecho:
 - `sectors` con anillo, huecos y multipolígono; rasterización por regla par-impar.
 - Importación de un polígono desde KML, GeoJSON, CSV o TXT en la pestaña Coordenadas.
+- Cobertura automática IGAC desde 291 ImageServer públicos, con GeoTIFF exportado por polígono.
 - Pendiente coloreada sobre el croquis con resumen y leyenda de rangos.
 - Informe completo en pantalla, sin descargar PDF.
 - Área efectiva, área bruta, cobertura, celdas válidas y celdas rasterizadas.
@@ -188,6 +197,10 @@ Reglas de persistencia:
 
 Sin claves en el frontend. El frontend solo usa `fetch` al backend propio; el service worker cachea únicamente mismo origen.
 
+La cobertura IGAC de esta versión usa directamente los ImageServer públicos del
+IGAC y un índice estático; no requiere backend propio. `/coverage` y `/slope`
+quedan para la fuente free global y Pro.
+
 ## Cobertura de aceptación
 
 | # | Requisito | Estado |
@@ -200,12 +213,12 @@ Sin claves en el frontend. El frontend solo usa `fetch` al backend propio; el se
 | 6 | Mismo polígono → mismo hash y costo €0 | Hash cubierto; cotización pendiente |
 | 7 | Sin red tras primer cálculo | PWA cachea el shell y calcula local; falta IndexedDB para grillas |
 | 8 | Caso v1 intacto | Normalización tolerante; falta prueba de migración dedicada |
-| 9–12 | Free/Pro, cotización, pedidos y teselas | Pendiente de backend y licencias |
+| 9–12 | Free/Pro, cotización, pedidos y teselas | IGAC local automático cubierto; free global, Pro, cotización y pedidos pendientes |
 | 13–14 | `/slope` free30/Pro y DSM | Invariantes de módulo y adaptador cubiertos; endpoints y licencias pendientes |
-| 15–16 | Pendiente media 2 % ± 0,3 y clases | Núcleo cubierto; E2E BYOD con 10 % y clase III verificado |
+| 15–16 | Pendiente media 2 % ± 0,3 y clases | Núcleo cubierto; E2E BYOD e IGAC verificados |
 
 ## Próximo paso recomendado
 
-1. Cerrar Fase 0 (licencias) o autorizar explícitamente un free solo con datos abiertos.
-2. Probar la PWA BYOD en un móvil real (instalación, 390 px, workers, archivo grande, sonido).
-3. Conectar IGAC/FABDEM y el nivel Pro solo después del ADR y con `/coverage`, `/quote` y `/order`.
+1. Validar LE90 de las teselas IGAC y la cobertura municipal con fichas técnicas.
+2. Probar la cobertura automática y el informe en un móvil real.
+3. Resolver la fuente free global y el contrato de distribución Pro antes de cobrar.
