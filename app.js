@@ -11,7 +11,7 @@
   const DEG = Math.PI / 180;
   const CIRCLE_SEGMENTS = 64;
   const APP_NAME = "CAMPO VERDE JRB";
-  const APP_VERSION = "1.7.0";
+  const APP_VERSION = "1.7.1";
   const BRAND_LINE = "AVALÚOS INTEGRALES · Urbanos & Rurales";
   const STORAGE_KEY = "campoverdejr.state.v2";
   const LEGACY_STORAGE_KEY = "terralinde.state.v1";
@@ -5315,6 +5315,9 @@
         demFormDirty = false;
         renderDemResult(result);
         refreshDemState();
+        if (demAutoSource && el.demCoverageNote) {
+          setText(el.demCoverageNote, "Análisis completado. Revisa la pendiente en el croquis y el informe.");
+        }
         finish();
         persistState();
         showToast(`Pendiente calculada: media ${demNumber(result.slope && result.slope.meanPct, 2)} %, P95 ${demNumber(result.slope && result.slope.p95Pct, 2)} %.`, 4600);

@@ -1,7 +1,7 @@
 # Módulo DEM · plan de trabajo
 
 - **Rama:** `main` publicada; el desarrollo original está en `feat/pendiente-dtm`
-- **Base:** `main` con merge `1389cc6`; esta versión usa el service worker `campoverdejr-v11`
+- **Base:** `main` con merge `1389cc6`; esta versión usa el service worker `campoverdejr-v12`
 - **Fecha:** 2026-11-24
 - **Estado:** BYOD, cobertura automática IGAC, pendiente sobre el croquis e informe en pantalla publicados; free/pro siguen bloqueados por licencias
 
